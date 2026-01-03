@@ -1,0 +1,33 @@
+{{- if .Values.admissionController.enabled }}
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: vertical-pod-autoscaler-webhook-config
+  labels:
+    {{- include "vertical-pod-autoscaler.labels" . | nindent 4 }}
+webhooks:
+  - name: vertical-pod-autoscaler.k8s.io
+    admissionReviewVersions: ["v1"]
+    clientConfig:
+      service:
+        name: {{ include "vertical-pod-autoscaler.admissionControllerName" . }}
+        namespace: {{ .Release.Namespace }}
+        path: /
+        port: {{ .Values.admissionController.service.port }}
+      {{- if .Values.admissionController.webhook.insecureSkipTLSVerify }}
+      caBundle: ""
+      {{- end }}
+    failurePolicy: Ignore
+    matchPolicy: Equivalent
+    rules:
+      - operations: ["CREATE"]
+        apiGroups: [""]
+        apiVersions: ["v1"]
+        resources: ["pods"]
+      - operations: ["CREATE", "UPDATE"]
+        apiGroups: ["autoscaling.k8s.io"]
+        apiVersions: ["*"]
+        resources: ["verticalpodautoscalers"]
+    sideEffects: None
+    timeoutSeconds: 30
+{{- end }}

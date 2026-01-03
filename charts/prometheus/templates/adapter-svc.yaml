@@ -1,0 +1,20 @@
+{{- if .Values.adapter.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "prometheus.adapterName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "prometheus.labels" . | nindent 4 }}
+    app.kubernetes.io/component: adapter
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "prometheus.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: adapter
+  ports:
+    - name: https
+      port: {{ .Values.adapter.service.port }}
+      targetPort: {{ .Values.adapter.service.targetPort }}
+      protocol: TCP
+{{- end }}

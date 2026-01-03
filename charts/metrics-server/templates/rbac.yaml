@@ -1,0 +1,83 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "metrics-server.fullname" . }}
+  labels:
+    {{- include "metrics-server.labels" . | nindent 4 }}
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "metrics-server.fullname" . }}
+  labels:
+    {{- include "metrics-server.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["nodes", "nodes/stats", "nodes/metrics", "pods"]
+    verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "metrics-server.fullname" . }}
+  labels:
+    {{- include "metrics-server.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "metrics-server.fullname" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "metrics-server.fullname" . }}
+    namespace: {{ .Release.Namespace }}
+
+---
+# Role: allow reading extension-apiserver-authentication configmap in kube-system
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "metrics-server.fullname" . }}-configmap-reader
+  namespace: kube-system
+  labels:
+    {{- include "metrics-server.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["extension-apiserver-authentication"]
+    verbs: ["get", "list", "watch"]
+
+---
+# RoleBinding: bind that Role to the metrics-server ServiceAccount
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "metrics-server.fullname" . }}-configmap-reader
+  namespace: kube-system
+  labels:
+    {{- include "metrics-server.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "metrics-server.fullname" . }}-configmap-reader
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "metrics-server.fullname" . }}
+    namespace: {{ .Release.Namespace }}
+
+---
+# ClusterRole: aggregated metrics reader for kubectl top and HPA
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: system:aggregated-metrics-reader
+  labels:
+    {{- include "metrics-server.labels" . | nindent 4 }}
+    rbac.authorization.k8s.io/aggregate-to-view: "true"
+    rbac.authorization.k8s.io/aggregate-to-edit: "true"
+    rbac.authorization.k8s.io/aggregate-to-admin: "true"
+rules:
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["pods", "nodes"]
+    verbs: ["get", "list", "watch"]

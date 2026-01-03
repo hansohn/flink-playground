@@ -1,0 +1,190 @@
+{{- if .Values.prometheus.enabled }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "prometheus.prometheusName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "prometheus.labels" . | nindent 4 }}
+    app.kubernetes.io/component: prometheus
+{{- end }}
+
+{{- if .Values.adapter.enabled }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "prometheus.adapterName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "prometheus.labels" . | nindent 4 }}
+    app.kubernetes.io/component: adapter
+{{- end }}
+
+{{- if .Values.prometheus.enabled }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "prometheus.prometheusName" . }}
+  labels:
+    {{- include "prometheus.labels" . | nindent 4 }}
+    app.kubernetes.io/component: prometheus
+rules:
+  - apiGroups: [""]
+    resources: ["nodes", "nodes/proxy", "services", "endpoints", "pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch"]
+  - nonResourceURLs: ["/metrics"]
+    verbs: ["get"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "prometheus.prometheusName" . }}
+  labels:
+    {{- include "prometheus.labels" . | nindent 4 }}
+    app.kubernetes.io/component: prometheus
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "prometheus.prometheusName" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "prometheus.prometheusName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}
+
+{{- if .Values.adapter.enabled }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "prometheus.adapterName" . }}
+  labels:
+    {{- include "prometheus.labels" . | nindent 4 }}
+    app.kubernetes.io/component: adapter
+rules:
+  - apiGroups: [""]
+    resources: ["nodes", "namespaces", "pods", "services"]
+    verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "prometheus.adapterName" . }}
+  labels:
+    {{- include "prometheus.labels" . | nindent 4 }}
+    app.kubernetes.io/component: adapter
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "prometheus.adapterName" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "prometheus.adapterName" . }}
+    namespace: {{ .Release.Namespace }}
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "prometheus.adapterName" . }}-resource-reader
+  labels:
+    {{- include "prometheus.labels" . | nindent 4 }}
+    app.kubernetes.io/component: adapter
+rules:
+  - apiGroups: ["custom.metrics.k8s.io"]
+    resources: ["*"]
+    verbs: ["*"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "prometheus.adapterName" . }}-resource-reader
+  labels:
+    {{- include "prometheus.labels" . | nindent 4 }}
+    app.kubernetes.io/component: adapter
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "prometheus.adapterName" . }}-resource-reader
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "prometheus.adapterName" . }}
+    namespace: {{ .Release.Namespace }}
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "prometheus.adapterName" . }}-hpa-controller
+  labels:
+    {{- include "prometheus.labels" . | nindent 4 }}
+    app.kubernetes.io/component: adapter
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces", "pods", "services"]
+    verbs: ["get", "list"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "prometheus.adapterName" . }}-hpa-controller
+  labels:
+    {{- include "prometheus.labels" . | nindent 4 }}
+    app.kubernetes.io/component: adapter
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "prometheus.adapterName" . }}-hpa-controller
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "prometheus.adapterName" . }}
+    namespace: {{ .Release.Namespace }}
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "prometheus.adapterName" . }}-system-auth-delegator
+  labels:
+    {{- include "prometheus.labels" . | nindent 4 }}
+    app.kubernetes.io/component: adapter
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "prometheus.adapterName" . }}
+    namespace: {{ .Release.Namespace }}
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "prometheus.adapterName" . }}-auth-reader
+  namespace: kube-system
+  labels:
+    {{- include "prometheus.labels" . | nindent 4 }}
+    app.kubernetes.io/component: adapter
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: extension-apiserver-authentication-reader
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "prometheus.adapterName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

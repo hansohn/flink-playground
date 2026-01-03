@@ -1,0 +1,6 @@
+apiVersion: v2
+name: metrics-server
+description: Minimal metrics-server Helm chart tailored for Kind / local clusters
+type: application
+version: 0.1.0
+appVersion: "0.8.0" # metrics-server image tag

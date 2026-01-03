@@ -1,0 +1,26 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: flink-autoscale
+
+# Optional: tweak Kubernetes version if you want a specific one
+# (otherwise Kind will use its default node image for your version)
+# nodeImage: kindest/node:v1.30.0
+
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      # For Flink Web UI via NodePort (we'll map NodePort 30081 -> localhost:8081)
+      - containerPort: 30081
+        hostPort: 8081
+        protocol: TCP
+
+      # Optional: expose HTTP/HTTPS for an ingress controller later
+      - containerPort: 80
+        hostPort: 80
+        protocol: TCP
+      - containerPort: 443
+        hostPort: 443
+        protocol: TCP
+
+  - role: worker
+  - role: worker

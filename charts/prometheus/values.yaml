@@ -1,0 +1,110 @@
+# Prometheus Server Component
+prometheus:
+  enabled: true
+  replicaCount: 1
+  tag: "v2.45.0"
+
+  image:
+    repository: prom/prometheus
+    pullPolicy: IfNotPresent
+
+  # Kind-optimized resources (minimal for local testing)
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 9090
+    targetPort: 9090
+
+  # Storage: emptyDir for Kind, not persistent
+  storage:
+    type: emptyDir
+
+  # Args tuned for Kind
+  args:
+    - --config.file=/etc/prometheus/prometheus.yml
+    - --storage.tsdb.path=/prometheus
+    - --storage.tsdb.retention.time=24h
+    - --web.console.libraries=/usr/share/prometheus/console_libraries
+    - --web.console.templates=/usr/share/prometheus/consoles
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# Prometheus Adapter Component
+adapter:
+  enabled: true
+  replicaCount: 1
+  tag: "v0.11.2"
+
+  image:
+    repository: registry.k8s.io/prometheus-adapter/prometheus-adapter
+    pullPolicy: IfNotPresent
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+  service:
+    port: 443
+    targetPort: 6443
+
+  # Prometheus server URL (will be templated)
+  prometheus:
+    url: ""  # Auto-set to prometheus service
+    port: 9090
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# Scrape configuration
+scrape:
+  # Global Prometheus config
+  global:
+    scrapeInterval: 30s
+    evaluationInterval: 30s
+
+  # Extension point for additional scrape configs (Flink, etc.)
+  # Example for Flink integration:
+  # additionalConfigs: |
+  #   - job_name: 'flink-taskmanager'
+  #     kubernetes_sd_configs:
+  #       - role: pod
+  #         namespaces:
+  #           names: ['flink']
+  #     relabel_configs:
+  #       - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+  #         action: keep
+  #         regex: true
+  #       - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_port]
+  #         target_label: __address__
+  #         regex: (.+):(?:\d+);(\d+)
+  #         replacement: $1:$2
+  additionalConfigs: ""
+
+# Custom metrics adapter configuration
+adapterConfig:
+  # Rules for mapping Prometheus metrics to Kubernetes custom metrics
+  # Example rules for Flink metrics:
+  # rules:
+  #   - seriesQuery: 'flink_taskmanager_job_task_numRecordsInPerSecond'
+  #     resources:
+  #       template: <<.Resource>>
+  #     name:
+  #       matches: "^(.*)$"
+  #       as: "flink_records_per_second"
+  #     metricsQuery: 'avg(<<.Series>>{<<.LabelMatchers>>})'
+  rules: []

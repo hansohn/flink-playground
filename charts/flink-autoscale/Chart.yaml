@@ -1,0 +1,23 @@
+apiVersion: v2
+name: flink-autoscale
+description: Flink JobManager/TaskManager deployment with HPA for local autoscaling experiments (e.g. on Kind)
+type: application
+
+# Version of *this chart* (your packaging/versioning)
+version: 0.1.0
+
+# Version of the app you're deploying (Flink image version)
+appVersion: "1.18.0"
+
+# Optional but nice to have:
+home: https://flink.apache.org/
+sources:
+  - https://github.com/apache/flink
+keywords:
+  - flink
+  - streaming
+  - autoscaling
+  - hpa
+maintainers:
+  - name: Your Name
+    email: you@example.com

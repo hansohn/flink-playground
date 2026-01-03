@@ -1,0 +1,46 @@
+image:
+  repository: flink
+  tag: "1.18-scala_2.12"
+  pullPolicy: IfNotPresent
+
+jobManager:
+  replicas: 1
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "512Mi"
+    limits:
+      cpu: "1"
+      memory: "1Gi"
+  service:
+    nodePort: 30081
+    webPort: 8081
+    rpcPort: 6123
+
+taskManager:
+  replicas: 1
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "512Mi"
+    limits:
+      cpu: "1"
+      memory: "1Gi"
+  slots: 2
+
+hpa:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 10
+  targetCPUUtilization: 70   # horizontal scaling on CPU
+
+vpa:
+  enabled: true
+  updateMode: "Auto"         # "Off" | "Initial" | "Auto" | "Recreate"
+  # We only want vertical scaling on memory, so we control memory only.
+  controlledResources:
+    - "memory"
+  minAllowed:
+    memory: "256Mi"
+  maxAllowed:
+    memory: "2Gi"

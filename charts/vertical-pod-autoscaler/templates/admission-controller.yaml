@@ -1,0 +1,65 @@
+{{- if .Values.admissionController.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "vertical-pod-autoscaler.admissionControllerName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vertical-pod-autoscaler.labels" . | nindent 4 }}
+    app.kubernetes.io/component: admission-controller
+spec:
+  replicas: {{ .Values.admissionController.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "vertical-pod-autoscaler.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: admission-controller
+  template:
+    metadata:
+      labels:
+        {{- include "vertical-pod-autoscaler.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: admission-controller
+    spec:
+      serviceAccountName: {{ include "vertical-pod-autoscaler.admissionControllerName" . }}
+      containers:
+        - name: admission-controller
+          image: "{{ .Values.image.repository }}-admission-controller:{{ .Values.admissionController.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            {{- range .Values.admissionController.args }}
+            - {{ . | quote }}
+            {{- end }}
+          env:
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          ports:
+            - name: webhook
+              containerPort: {{ .Values.admissionController.service.targetPort }}
+              protocol: TCP
+            - name: metrics
+              containerPort: 8944
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health-check
+              port: metrics
+              scheme: HTTP
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health-check
+              port: metrics
+              scheme: HTTP
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.admissionController.resources | nindent 12 }}
+      nodeSelector:
+        {{- toYaml .Values.admissionController.nodeSelector | nindent 8 }}
+      tolerations:
+        {{- toYaml .Values.admissionController.tolerations | nindent 8 }}
+      affinity:
+        {{- toYaml .Values.admissionController.affinity | nindent 8 }}
+{{- end }}

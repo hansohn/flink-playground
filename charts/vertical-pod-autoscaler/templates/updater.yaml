@@ -1,0 +1,57 @@
+{{- if .Values.updater.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "vertical-pod-autoscaler.updaterName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vertical-pod-autoscaler.labels" . | nindent 4 }}
+    app.kubernetes.io/component: updater
+spec:
+  replicas: {{ .Values.updater.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "vertical-pod-autoscaler.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: updater
+  template:
+    metadata:
+      labels:
+        {{- include "vertical-pod-autoscaler.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: updater
+    spec:
+      serviceAccountName: {{ include "vertical-pod-autoscaler.updaterName" . }}
+      containers:
+        - name: updater
+          image: "{{ .Values.image.repository }}-updater:{{ .Values.updater.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            {{- range .Values.updater.args }}
+            - {{ . | quote }}
+            {{- end }}
+          ports:
+            - name: metrics
+              containerPort: 8943
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health-check
+              port: metrics
+              scheme: HTTP
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health-check
+              port: metrics
+              scheme: HTTP
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.updater.resources | nindent 12 }}
+      nodeSelector:
+        {{- toYaml .Values.updater.nodeSelector | nindent 8 }}
+      tolerations:
+        {{- toYaml .Values.updater.tolerations | nindent 8 }}
+      affinity:
+        {{- toYaml .Values.updater.affinity | nindent 8 }}
+{{- end }}

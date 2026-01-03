@@ -1,0 +1,30 @@
+replicaCount: 1
+
+image:
+  repository: registry.k8s.io/metrics-server/metrics-server
+  tag: "v0.8.0"
+  pullPolicy: IfNotPresent
+
+# Args tuned for Kind / local dev
+args:
+  - --cert-dir=/tmp
+  - --kubelet-insecure-tls
+  - --kubelet-preferred-address-types=InternalIP,Hostname
+  - --secure-port=4443
+  - --kubelet-use-node-status-port
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
+
+service:
+  port: 443    # ClusterIP port
+  targetPort: 4443
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

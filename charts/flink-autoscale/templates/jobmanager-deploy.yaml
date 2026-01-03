@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "flink-autoscale.jmName" . }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: {{ .Values.jobManager.replicas }}
+  selector:
+    matchLabels:
+      {{- include "flink-autoscale.selectorLabels" . | nindent 6 }}
+      component: jobmanager
+  template:
+    metadata:
+      labels:
+        {{- include "flink-autoscale.selectorLabels" . | nindent 8 }}
+        component: jobmanager
+    spec:
+      containers:
+        - name: jobmanager
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["jobmanager"]
+          env:
+            - name: JOB_MANAGER_RPC_ADDRESS
+              value: {{ include "flink-autoscale.jmName" . }}
+          resources:
+            {{- toYaml .Values.jobManager.resources | nindent 12 }}

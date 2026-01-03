@@ -1,0 +1,36 @@
+{{- if .Values.adapter.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "prometheus.adapterName" . }}-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "prometheus.labels" . | nindent 4 }}
+    app.kubernetes.io/component: adapter
+data:
+  config.yaml: |
+    rules:
+    {{- if .Values.adapterConfig.rules }}
+    {{- range .Values.adapterConfig.rules }}
+    - seriesQuery: {{ .seriesQuery | quote }}
+      resources:
+        {{- toYaml .resources | nindent 8 }}
+      name:
+        {{- toYaml .name | nindent 8 }}
+      metricsQuery: {{ .metricsQuery | quote }}
+    {{- end }}
+    {{- else }}
+    # No custom metrics rules defined yet
+    # Add rules in values.yaml under adapterConfig.rules
+    # Example:
+    # - seriesQuery: 'flink_taskmanager_job_task_numRecordsInPerSecond{namespace!="",pod!=""}'
+    #   resources:
+    #     overrides:
+    #       namespace: {resource: "namespace"}
+    #       pod: {resource: "pod"}
+    #   name:
+    #     matches: "^(.*)$"
+    #     as: "flink_records_per_second"
+    #   metricsQuery: 'avg(<<.Series>>{<<.LabelMatchers>>}) by (<<.GroupBy>>)'
+    {{- end }}
+{{- end }}
