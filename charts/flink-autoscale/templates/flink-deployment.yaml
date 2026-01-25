@@ -23,6 +23,11 @@ spec:
       memory: {{ if $job.jobManager }}{{ default $.Values.defaults.jobManager.memory $job.jobManager.memory | default $.Values.defaults.jobManager.memory | quote }}{{ else }}{{ $.Values.defaults.jobManager.memory | quote }}{{ end }}
       cpu: {{ if $job.jobManager }}{{ default $.Values.defaults.jobManager.cpu $job.jobManager.cpu | default $.Values.defaults.jobManager.cpu }}{{ else }}{{ $.Values.defaults.jobManager.cpu }}{{ end }}
     podTemplate:
+      metadata:
+        annotations:
+          prometheus.io/scrape: "true"
+          prometheus.io/port: "9249"
+          prometheus.io/path: "/"
       spec:
         containers:
           - name: flink-main-container
@@ -40,6 +45,11 @@ spec:
       memory: {{ if $job.taskManager }}{{ default $.Values.defaults.taskManager.memory $job.taskManager.memory | default $.Values.defaults.taskManager.memory | quote }}{{ else }}{{ $.Values.defaults.taskManager.memory | quote }}{{ end }}
       cpu: {{ if $job.taskManager }}{{ default $.Values.defaults.taskManager.cpu $job.taskManager.cpu | default $.Values.defaults.taskManager.cpu }}{{ else }}{{ $.Values.defaults.taskManager.cpu }}{{ end }}
     podTemplate:
+      metadata:
+        annotations:
+          prometheus.io/scrape: "true"
+          prometheus.io/port: "9249"
+          prometheus.io/path: "/"
       spec:
         containers:
           - name: flink-main-container

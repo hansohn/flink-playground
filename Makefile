@@ -114,14 +114,14 @@ cluster/status: kind/check
 # Managed by ArgoCD - see argocd/apps/prometheus.yaml
 
 PROMETHEUS_NAMESPACE := monitoring
-PROMETHEUS_RELEASE := prometheus-community
+PROMETHEUS_SERVICE := prometheus-prometheus
 
 ## Port forward to Prometheus UI (http://localhost:9090)
 prometheus/ui: kind/check
 	@echo "[INFO] Port forwarding to Prometheus UI at http://localhost:9090"
 	@echo "[INFO] Press Ctrl+C to stop"
 	@$(KUBECTL) port-forward -n $(PROMETHEUS_NAMESPACE) \
-		svc/$(PROMETHEUS_RELEASE)-server 9090:9090
+		svc/$(PROMETHEUS_SERVICE) 9090:9090
 .PHONY: prometheus/ui
 
 #-------------------------------------------------------------------------------
@@ -197,6 +197,7 @@ argocd/status: kind/check
 
 FLINK_RELEASE := flink-autoscale
 FLINK_NAMESPACE := flink
+FLINK_SERVICE := flink-autoscale-autoscaling-load-rest
 
 APP_DIR := services/autoscaling-load-job
 APP_POM := $(APP_DIR)/pom.xml
@@ -361,7 +362,7 @@ flink/ui: kind/check
 	@echo "[INFO] Port forwarding to Flink UI at http://localhost:8081"
 	@echo "[INFO] Press Ctrl+C to stop"
 	@$(KUBECTL) port-forward -n $(FLINK_NAMESPACE) \
-		svc/$(FLINK_RELEASE)-jobmanager 8081:8081
+		svc/$(FLINK_SERVICE) 8081:8081
 .PHONY: flink/ui
 
 ## Tail Flink JobManager logs
