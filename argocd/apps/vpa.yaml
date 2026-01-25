@@ -9,7 +9,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/hansohn/flink-playground.git
-    targetRevision: HEAD
+    targetRevision: argocd
     path: charts/vertical-pod-autoscaler
   destination:
     server: https://kubernetes.default.svc
