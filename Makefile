@@ -361,7 +361,7 @@ flink/ui: kind/check
 	@echo "[INFO] Port forwarding to Flink UI at http://localhost:8081"
 	@echo "[INFO] Press Ctrl+C to stop"
 	@$(KUBECTL) port-forward -n $(FLINK_NAMESPACE) \
-		svc/$(FLINK_RELEASE)-autoscaling-load-rest 8081:8081
+		svc/$(FLINK_RELEASE)-jobmanager 8081:8081
 .PHONY: flink/ui
 
 ## Tail Flink JobManager logs
