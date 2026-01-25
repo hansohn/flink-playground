@@ -6,7 +6,6 @@ import org.apache.flink.api.common.functions.RichMapFunction;
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
-import org.apache.flink.api.common.time.Time;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.CheckpointingMode;
@@ -16,7 +15,8 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.source.RichParallelSourceFunction;
 import org.apache.flink.streaming.api.functions.windowing.ProcessWindowFunction;
 import org.apache.flink.streaming.api.windowing.assigners.TumblingProcessingTimeWindows;
-import org.apache.flink.streaming.api.windowing.time.TimeWindow;
+import org.apache.flink.streaming.api.windowing.time.Time;
+import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
 import org.apache.flink.util.Collector;
 
 import java.util.Random;
@@ -48,7 +48,7 @@ public class AutoscalingLoadJob {
         env.getCheckpointConfig().setMinPauseBetweenCheckpoints(5_000);
 
         // 1) Synthetic load source
-        DataStreamSource<LoadEvent> source =
+        SingleOutputStreamOperator<LoadEvent> source =
                 env.addSource(new SyntheticLoadSource(eventsPerSecondPerParallelSubtask, numKeys))
                    .name("synthetic-load-source")
                    .uid("synthetic-load-source");

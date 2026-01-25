@@ -1,46 +1,186 @@
-image:
-  repository: flink
-  tag: "1.18-scala_2.12"
-  pullPolicy: IfNotPresent
+# Global defaults for all jobs
+# Can be overridden per-job in the jobs list below
+defaults:
+  image:
+    repository: flink
+    tag: "1.18-scala_2.12"
+    pullPolicy: IfNotPresent
 
-jobManager:
-  replicas: 1
-  resources:
-    requests:
-      cpu: "250m"
-      memory: "512Mi"
-    limits:
-      cpu: "1"
-      memory: "1Gi"
-  service:
-    nodePort: 30081
-    webPort: 8081
-    rpcPort: 6123
+  jobManager:
+    replicas: 1
+    # CPU for Flink resource spec (numeric, in cores)
+    cpu: 0.5
+    # Memory for Flink resource spec (Kubernetes format)
+    memory: "1024Mi"
+    # Kubernetes pod resources (for podTemplate)
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "1Gi"
+      limits:
+        cpu: "1"
+        memory: "2Gi"
 
-taskManager:
-  replicas: 1
-  resources:
-    requests:
-      cpu: "250m"
-      memory: "512Mi"
-    limits:
-      cpu: "1"
-      memory: "1Gi"
-  slots: 2
+  taskManager:
+    replicas: 1
+    # CPU for Flink resource spec (numeric, in cores)
+    cpu: 0.5
+    # Memory for Flink resource spec (Kubernetes format)
+    memory: "1024Mi"
+    # Kubernetes pod resources (for podTemplate)
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "1Gi"
+      limits:
+        cpu: "2"
+        memory: "2Gi"
+    slots: 2
 
-hpa:
-  enabled: true
-  minReplicas: 1
-  maxReplicas: 10
-  targetCPUUtilization: 70   # horizontal scaling on CPU
+  # VPA Configuration (complements Flink Operator autoscaler)
+  vpa:
+    enabled: true               # Enabled - Complements Flink Operator by optimizing memory per pod
+    updateMode: "Auto"          # "Off" | "Initial" | "Auto" | "Recreate"
+    # We only want vertical scaling on memory, so we control memory only.
+    # Flink Operator handles horizontal scaling (number of TaskManagers)
+    # VPA handles vertical scaling (memory per TaskManager)
+    controlledResources:
+      - "memory"
+    minAllowed:
+      memory: "256Mi"
+    maxAllowed:
+      memory: "2Gi"
 
-vpa:
-  enabled: true
-  updateMode: "Auto"         # "Off" | "Initial" | "Auto" | "Recreate"
-  # We only want vertical scaling on memory, so we control memory only.
-  controlledResources:
-    - "memory"
-  minAllowed:
-    memory: "256Mi"
-  maxAllowed:
-    memory: "2Gi"
+  # Flink Kubernetes Operator Autoscaler Configuration
+  autoscaler:
+    enabled: true
+    metricsWindow: "5m"
+    stabilizationInterval: "1m"
+    targetUtilization: "0.7"
+    targetUtilizationBoundary: "0.1"
+    scaleUpGracePeriod: "1m"
+    scaleDownGracePeriod: "3m"
+    minParallelism: 1
+    maxParallelism: 10
+
+# Define multiple Flink jobs
+# Each job creates a separate FlinkDeployment (cluster + job)
+jobs:
+  # Example 1: Autoscaling Load Job
+  - name: autoscaling-load
+    enabled: true
+
+    # Use custom image with JAR bundled
+    image:
+      repository: flink-autoscaling-load
+      tag: "1.0.0"
+      pullPolicy: IfNotPresent
+
+    # Job specification (Application Mode)
+    job:
+      jarURI: "local:///opt/flink/usrlib/autoscaling-load-job.jar"
+      entryClass: "com.example.flink.AutoscalingLoadJob"
+      parallelism: 2
+      upgradeMode: savepoint
+      state: running
+      args: []
+
+    # Override resources if needed
+    jobManager:
+      cpu: 0.5
+      memory: "1024Mi"
+      resources:
+        requests:
+          cpu: "250m"
+          memory: "1Gi"
+        limits:
+          cpu: "1"
+          memory: "2Gi"
+
+    taskManager:
+      cpu: 0.5
+      memory: "1024Mi"
+      resources:
+        requests:
+          cpu: "250m"
+          memory: "1Gi"
+        limits:
+          cpu: "2"
+          memory: "2Gi"
+      slots: 2
+
+    # Override VPA settings if needed (inherits from defaults if not specified)
+    # vpa:
+    #   enabled: true
+    #   updateMode: "Auto"
+
+    # Override autoscaler settings if needed
+    autoscaler:
+      enabled: true
+      targetUtilization: "0.7"
+      minParallelism: 1
+      maxParallelism: 10
+
+    # Additional Flink configuration
+    # Note: Using in-memory state backend for playground simplicity
+    # Use persistent volumes with RocksDB state backend for production
+    flinkConfiguration:
+      state.backend.type: hashmap
+      state.checkpoints.dir: file:///tmp/flink-checkpoints
+      state.savepoints.dir: file:///tmp/flink-savepoints
+      execution.checkpointing.interval: "30s"
+
+  # Example 2: Analytics Pipeline (disabled by default)
+  # Uncomment to enable
+  # - name: analytics-pipeline
+  #   enabled: false
+  #
+  #   job:
+  #     jarURI: "local:///opt/flink/usrlib/analytics-pipeline.jar"
+  #     entryClass: "com.example.flink.AnalyticsPipeline"
+  #     parallelism: 4
+  #     upgradeMode: savepoint
+  #     state: running
+  #
+  #   autoscaler:
+  #     enabled: true
+  #     targetUtilization: "0.8"  # More aggressive scaling
+  #     minParallelism: 2
+  #     maxParallelism: 20
+  #
+  #   # Different VPA settings for this job
+  #   vpa:
+  #     enabled: true
+  #     updateMode: "Auto"
+  #     controlledResources:
+  #       - "memory"
+  #     minAllowed:
+  #       memory: "512Mi"
+  #     maxAllowed:
+  #       memory: "4Gi"
+  #
+  #   taskManager:
+  #     resources:
+  #       requests:
+  #         cpu: "500m"
+  #         memory: "1Gi"
+  #       limits:
+  #         cpu: "2"
+  #         memory: "2Gi"
+  #     slots: 4
+
+  # Example 3: Session Cluster (no job defined)
+  # Uncomment to enable
+  # - name: dev-session
+  #   enabled: false
+  #
+  #   # No job section = Session Mode
+  #   # Submit jobs manually via CLI/UI
+  #
+  #   # Disable autoscaler for session mode
+  #   autoscaler:
+  #     enabled: false
+  #
+  #   taskManager:
+  #     replicas: 2
+  #     slots: 4

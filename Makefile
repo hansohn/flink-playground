@@ -232,6 +232,89 @@ vpa/reinstall: vpa/uninstall vpa/install
 .PHONY: vpa/reinstall
 
 #-------------------------------------------------------------------------------
+# Cert Manager (required by Flink Operator)
+#-------------------------------------------------------------------------------
+
+CERT_MANAGER_NAMESPACE := cert-manager
+CERT_MANAGER_VERSION := v1.8.2
+
+## Install cert-manager (idempotent)
+cert-manager/install: cluster/up
+	@if ! $(KUBECTL) get namespace $(CERT_MANAGER_NAMESPACE) > /dev/null 2>&1; then \
+		echo "[INFO] Installing cert-manager $(CERT_MANAGER_VERSION)"; \
+		$(KUBECTL) create -f https://github.com/jetstack/cert-manager/releases/download/$(CERT_MANAGER_VERSION)/cert-manager.yaml; \
+		echo "[INFO] Waiting for cert-manager to be ready..."; \
+		$(KUBECTL) wait --for=condition=Available --timeout=$(WAIT_TIMEOUT_MEDIUM) -n $(CERT_MANAGER_NAMESPACE) deployment/cert-manager 2>/dev/null || true; \
+		$(KUBECTL) wait --for=condition=Available --timeout=$(WAIT_TIMEOUT_MEDIUM) -n $(CERT_MANAGER_NAMESPACE) deployment/cert-manager-webhook 2>/dev/null || true; \
+		$(KUBECTL) wait --for=condition=Available --timeout=$(WAIT_TIMEOUT_MEDIUM) -n $(CERT_MANAGER_NAMESPACE) deployment/cert-manager-cainjector 2>/dev/null || true; \
+		echo "[INFO] cert-manager installed successfully"; \
+	else \
+		echo "[INFO] cert-manager already installed"; \
+	fi
+.PHONY: cert-manager/install
+
+## Uninstall cert-manager
+cert-manager/uninstall:
+	@if kind get clusters 2>/dev/null | grep -q "^$(CLUSTER_NAME)$$"; then \
+		if $(KUBECTL) get namespace $(CERT_MANAGER_NAMESPACE) > /dev/null 2>&1; then \
+			echo "[INFO] Uninstalling cert-manager"; \
+			$(KUBECTL) delete -f https://github.com/jetstack/cert-manager/releases/download/$(CERT_MANAGER_VERSION)/cert-manager.yaml 2>/dev/null || true; \
+		else \
+			echo "[INFO] cert-manager not installed"; \
+		fi \
+	else \
+		echo "[INFO] Cluster does not exist, skipping uninstall"; \
+	fi
+.PHONY: cert-manager/uninstall
+
+## Reinstall cert-manager
+cert-manager/reinstall: cert-manager/uninstall cert-manager/install
+.PHONY: cert-manager/reinstall
+
+#-------------------------------------------------------------------------------
+# Flink Kubernetes Operator
+#-------------------------------------------------------------------------------
+
+FLINK_OPERATOR_NAMESPACE := flink-operator
+FLINK_OPERATOR_RELEASE := flink-kubernetes-operator
+FLINK_OPERATOR_VERSION := 1.12.1
+FLINK_OPERATOR_CHART_URL := https://downloads.apache.org/flink/flink-kubernetes-operator-$(FLINK_OPERATOR_VERSION)/flink-kubernetes-operator-$(FLINK_OPERATOR_VERSION)-helm.tgz
+
+## Install Flink Kubernetes Operator (idempotent)
+flink-operator/install: cert-manager/install
+	@if ! $(KUBECTL) get deployment -n $(FLINK_OPERATOR_NAMESPACE) $(FLINK_OPERATOR_RELEASE) > /dev/null 2>&1; then \
+		echo "[INFO] Installing Flink Kubernetes Operator $(FLINK_OPERATOR_VERSION)"; \
+		$(KUBECTL) create namespace $(FLINK_OPERATOR_NAMESPACE) 2>/dev/null || true; \
+		$(HELM) upgrade --install $(FLINK_OPERATOR_RELEASE) $(FLINK_OPERATOR_CHART_URL) \
+			-n $(FLINK_OPERATOR_NAMESPACE) --create-namespace --wait --timeout=$(WAIT_TIMEOUT_LONG); \
+		echo "[INFO] Waiting for FlinkDeployment CRD to be ready..."; \
+		$(KUBECTL) wait --for condition=established --timeout=60s crd/flinkdeployments.flink.apache.org; \
+		echo "[INFO] Flink Operator installed successfully"; \
+	else \
+		echo "[INFO] Flink Operator already installed"; \
+	fi
+.PHONY: flink-operator/install
+
+## Uninstall Flink Operator
+flink-operator/uninstall:
+	@if kind get clusters 2>/dev/null | grep -q "^$(CLUSTER_NAME)$$"; then \
+		if $(KUBECTL) get namespace $(FLINK_OPERATOR_NAMESPACE) > /dev/null 2>&1; then \
+			echo "[INFO] Uninstalling Flink Operator"; \
+			$(HELM) uninstall $(FLINK_OPERATOR_RELEASE) -n $(FLINK_OPERATOR_NAMESPACE) 2>/dev/null || true; \
+			$(KUBECTL) delete namespace $(FLINK_OPERATOR_NAMESPACE) 2>/dev/null || true; \
+		else \
+			echo "[INFO] Flink Operator not installed"; \
+		fi \
+	else \
+		echo "[INFO] Cluster does not exist, skipping uninstall"; \
+	fi
+.PHONY: flink-operator/uninstall
+
+## Reinstall Flink Operator
+flink-operator/reinstall: flink-operator/uninstall flink-operator/install
+.PHONY: flink-operator/reinstall
+
+#-------------------------------------------------------------------------------
 # Flink
 #-------------------------------------------------------------------------------
 
@@ -239,20 +322,16 @@ FLINK_RELEASE := flink-autoscale
 FLINK_CHART := ./charts/flink-autoscale
 FLINK_NAMESPACE := flink
 
-APP_DIR := autoscaling-load-job
+APP_DIR := services/autoscaling-load-job
 APP_POM := $(APP_DIR)/pom.xml
 APP_JAR := $(APP_DIR)/target/autoscaling-load-job.jar
 
 ## Install Flink Autoscale application (idempotent)
-flink/install: cluster/up
-	@if ! $(KUBECTL) get deployment -n $(FLINK_NAMESPACE) $(FLINK_RELEASE)-flink-autoscale-jobmanager > /dev/null 2>&1; then \
-		echo "[INFO] Installing Flink Autoscale Helm chart"; \
-		$(HELM) upgrade --install $(FLINK_RELEASE) $(FLINK_CHART) \
-			-n $(FLINK_NAMESPACE) --create-namespace --wait --timeout=$(WAIT_TIMEOUT_MEDIUM); \
-		echo "[INFO] Flink installed successfully"; \
-	else \
-		echo "[INFO] Flink already installed"; \
-	fi
+flink/install: cluster/up docker/load
+	@echo "[INFO] Installing Flink Autoscale Helm chart"
+	@$(HELM) upgrade --install $(FLINK_RELEASE) $(FLINK_CHART) \
+		-n $(FLINK_NAMESPACE) --create-namespace --wait --timeout=$(WAIT_TIMEOUT_MEDIUM)
+	@echo "[INFO] Flink installed successfully"
 .PHONY: flink/install
 
 ## Uninstall Flink Autoscale application
@@ -278,7 +357,7 @@ flink/reinstall: flink/uninstall flink/install
 # -----------------------------
 
 ## Bootstrap entire environment (cluster + all components)
-up: cluster/up metrics-server/install prometheus/install vpa/install flink/install
+up: cluster/up metrics-server/install prometheus/install vpa/install flink-operator/install flink/install
 	@echo ""
 	@echo "=== Environment Ready ==="
 	@echo "Flink UI:      make flink/ui (then visit http://localhost:8081)"
@@ -294,6 +373,8 @@ down:
 	@echo "[INFO] Tearing down environment..."
 	@if kind get clusters 2>/dev/null | grep -q "^$(CLUSTER_NAME)$$"; then \
 		$(MAKE) flink/uninstall || true; \
+		$(MAKE) flink-operator/uninstall || true; \
+		$(MAKE) cert-manager/uninstall || true; \
 		$(MAKE) vpa/uninstall || true; \
 		$(MAKE) prometheus/uninstall || true; \
 		$(MAKE) metrics-server/uninstall || true; \
@@ -336,6 +417,48 @@ maven/build-shaded:
 .PHONY: maven/build-shaded
 
 # -----------------------------
+# Docker Image Build
+# -----------------------------
+
+DOCKER_IMAGE_NAME := flink-autoscaling-load
+DOCKER_IMAGE_TAG := 1.0.0
+DOCKER_IMAGE_FULL := $(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_TAG)
+
+## Build Docker image with JAR
+docker/build: maven/build docker/check
+	@echo "[INFO] Building Docker image: $(DOCKER_IMAGE_FULL)"
+	@cd $(APP_DIR) && docker build -t $(DOCKER_IMAGE_FULL) .
+	@echo "[INFO] Docker image built successfully"
+	@docker images | grep $(DOCKER_IMAGE_NAME) || true
+.PHONY: docker/build
+
+## Load Docker image into Kind cluster
+docker/load:
+	@if ! kind get clusters 2>/dev/null | grep -q "^$(CLUSTER_NAME)$$"; then \
+		echo "[ERROR] Cluster '$(CLUSTER_NAME)' does not exist. Run 'make cluster/up' first."; \
+		exit 1; \
+	fi
+	@if ! docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "^$(DOCKER_IMAGE_FULL)$$"; then \
+		echo "[INFO] Image $(DOCKER_IMAGE_FULL) not found locally, building..."; \
+		$(MAKE) docker/build; \
+	fi
+	@echo "[INFO] Loading Docker image into Kind cluster: $(CLUSTER_NAME)"
+	@kind load docker-image $(DOCKER_IMAGE_FULL) --name $(CLUSTER_NAME)
+	@echo "[INFO] Docker image loaded successfully"
+.PHONY: docker/load
+
+## Build and load Docker image into Kind (convenience target)
+docker/build-and-load: docker/build docker/load
+	@echo "[INFO] Docker image built and loaded into Kind cluster"
+.PHONY: docker/build-and-load
+
+## Remove Docker image
+docker/clean:
+	@echo "[INFO] Removing Docker image: $(DOCKER_IMAGE_FULL)"
+	@docker rmi $(DOCKER_IMAGE_FULL) 2>/dev/null || echo "[INFO] Image not found, nothing to remove"
+.PHONY: docker/clean
+
+# -----------------------------
 # Status Helpers
 # -----------------------------
 
@@ -365,8 +488,8 @@ status/flink:
 		echo "[ERROR] Flink namespace does not exist. Run 'make flink/install' first."; \
 		exit 1; \
 	fi
-	@echo "=== Flink Deployments ==="
-	@$(KUBECTL) get deployments -n $(FLINK_NAMESPACE)
+	@echo "=== Flink Deployments (Operator Managed) ==="
+	@$(KUBECTL) get flinkdeployments -n $(FLINK_NAMESPACE) 2>/dev/null || echo "No FlinkDeployments found"
 	@echo ""
 	@echo "=== Flink Pods ==="
 	@$(KUBECTL) get pods -n $(FLINK_NAMESPACE) -o wide
@@ -374,11 +497,11 @@ status/flink:
 	@echo "=== Flink Services ==="
 	@$(KUBECTL) get services -n $(FLINK_NAMESPACE)
 	@echo ""
-	@echo "=== HPA Status ==="
-	@$(KUBECTL) get hpa -n $(FLINK_NAMESPACE) 2>/dev/null || echo "No HPA found"
+	@echo "=== HPA Status (Legacy) ==="
+	@$(KUBECTL) get hpa -n $(FLINK_NAMESPACE) 2>/dev/null || echo "No HPA found (using Flink Operator autoscaler)"
 	@echo ""
-	@echo "=== VPA Status ==="
-	@$(KUBECTL) get vpa -n $(FLINK_NAMESPACE) 2>/dev/null || echo "No VPA found"
+	@echo "=== VPA Status (Legacy) ==="
+	@$(KUBECTL) get vpa -n $(FLINK_NAMESPACE) 2>/dev/null || echo "No VPA found (using Flink Operator autoscaler)"
 .PHONY: status/flink
 
 ## Describe all Flink resources
@@ -388,10 +511,10 @@ flink/describe:
 		exit 1; \
 	fi
 	@echo "=== Describing Flink Resources ==="
-	@$(KUBECTL) describe deployment -n $(FLINK_NAMESPACE) 2>/dev/null || true
+	@$(KUBECTL) describe flinkdeployments -n $(FLINK_NAMESPACE) 2>/dev/null || echo "No FlinkDeployments found"
 	@$(KUBECTL) describe pods -n $(FLINK_NAMESPACE) 2>/dev/null || true
-	@$(KUBECTL) describe hpa -n $(FLINK_NAMESPACE) 2>/dev/null || true
-	@$(KUBECTL) describe vpa -n $(FLINK_NAMESPACE) 2>/dev/null || true
+	@$(KUBECTL) describe hpa -n $(FLINK_NAMESPACE) 2>/dev/null || echo "No HPA (using Flink Operator autoscaler)"
+	@$(KUBECTL) describe vpa -n $(FLINK_NAMESPACE) 2>/dev/null || echo "No VPA (using Flink Operator autoscaler)"
 .PHONY: flink/describe
 
 ## Show Flink namespace events
@@ -413,7 +536,7 @@ flink/ui:
 	@echo "[INFO] Port forwarding to Flink UI at http://localhost:8081"
 	@echo "[INFO] Press Ctrl+C to stop"
 	@$(KUBECTL) port-forward -n $(FLINK_NAMESPACE) \
-		svc/$(FLINK_RELEASE)-flink-autoscale-jobmanager 8081:8081
+		svc/$(FLINK_RELEASE)-autoscaling-load-rest 8081:8081
 .PHONY: flink/ui
 
 ## Tail Flink JobManager logs
