@@ -41,7 +41,7 @@ prometheus:
 
 # Prometheus Adapter Component
 adapter:
-  enabled: true
+  enabled: false
   replicaCount: 1
   tag: "v0.11.2"
 
