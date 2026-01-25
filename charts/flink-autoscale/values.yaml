@@ -81,7 +81,7 @@ jobs:
       jarURI: "local:///opt/flink/usrlib/autoscaling-load-job.jar"
       entryClass: "com.example.flink.AutoscalingLoadJob"
       parallelism: 2
-      upgradeMode: savepoint
+      upgradeMode: stateless
       state: running
       args: []
 
