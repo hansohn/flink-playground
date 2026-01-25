@@ -37,19 +37,10 @@ defaults:
         memory: "2Gi"
     slots: 2
 
-  # VPA Configuration (complements Flink Operator autoscaler)
+  # VPA Configuration - DISABLED (incompatible with native mode)
+  # Use Flink Autotuning instead for memory optimization
   vpa:
-    enabled: true               # Enabled - Complements Flink Operator by optimizing memory per pod
-    updateMode: "Auto"          # "Off" | "Initial" | "Auto" | "Recreate"
-    # We only want vertical scaling on memory, so we control memory only.
-    # Flink Operator handles horizontal scaling (number of TaskManagers)
-    # VPA handles vertical scaling (memory per TaskManager)
-    controlledResources:
-      - "memory"
-    minAllowed:
-      memory: "256Mi"
-    maxAllowed:
-      memory: "2Gi"
+    enabled: false
 
   # Flink Kubernetes Operator Autoscaler Configuration
   autoscaler:
@@ -132,6 +123,9 @@ jobs:
       # Prometheus metrics reporter
       metrics.reporter.prom.factory.class: org.apache.flink.metrics.prometheus.PrometheusReporterFactory
       metrics.reporter.prom.port: "9249"
+      # Flink Autotuning - automatic memory optimization
+      kubernetes.operator.job.autoscaler.memory.tuning.enabled: "true"
+      kubernetes.operator.job.autoscaler.memory.tuning.overhead: "0.2"
 
   # Example 2: Analytics Pipeline (disabled by default)
   # Uncomment to enable
