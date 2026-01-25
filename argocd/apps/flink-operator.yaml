@@ -1,0 +1,69 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: flink-kubernetes-operator
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/compare-options: IgnoreExtraneous
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/apache/flink-kubernetes-operator.git
+    targetRevision: release-1.12.1
+    path: helm/flink-kubernetes-operator
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: flink-operator
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+      - RespectIgnoreDifferences=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  ignoreDifferences:
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+      name: flinkdeployments.flink.apache.org
+      jsonPointers:
+        - /spec/conversion/webhook/clientConfig/caBundle
+        - /metadata/annotations
+        - /status
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+      name: flinksessionjobs.flink.apache.org
+      jsonPointers:
+        - /spec/conversion/webhook/clientConfig/caBundle
+        - /metadata/annotations
+        - /status
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+      name: flinkstatesnapshots.flink.apache.org
+      jsonPointers:
+        - /spec/conversion/webhook/clientConfig/caBundle
+        - /metadata/annotations
+        - /status
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+      jsonPointers:
+        - /spec/conversion/webhook/clientConfig/caBundle
+        - /metadata/annotations
+        - /status
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /status
+    - group: apps
+      kind: ReplicaSet
+      jsonPointers:
+        - /status
+    - group: ""
+      kind: Pod
+      jsonPointers:
+        - /status

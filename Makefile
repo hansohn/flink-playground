@@ -15,6 +15,7 @@ REPO_NAME ?= $(shell basename $(CURDIR))
 #-------------------------------------------------------------------------------
 # Configurable Timeouts
 #-------------------------------------------------------------------------------
+
 WAIT_TIMEOUT_SHORT := 90s
 WAIT_TIMEOUT_MEDIUM := 120s
 WAIT_TIMEOUT_LONG := 180s
@@ -46,10 +47,10 @@ validate/tools:
 ## Lint all Helm charts
 validate/charts:
 	@echo "[INFO] Linting Helm charts..."
-	@helm lint $(METRICS_CHART) || true
-	@helm lint $(PROMETHEUS_CHART) || true
-	@helm lint $(VPA_CHART) || true
-	@helm lint $(FLINK_CHART) || true
+	@helm lint ./charts/metrics-server || true
+	@helm lint ./charts/prometheus || true
+	@helm lint ./charts/vertical-pod-autoscaler || true
+	@helm lint ./charts/flink-autoscale || true
 	@echo "[INFO] Chart validation complete"
 .PHONY: validate/charts
 
@@ -66,11 +67,6 @@ KUBE_CONTEXT := kind-$(CLUSTER_NAME)
 KUBECONFIG ?= $(HOME)/.kube/config
 KUBECTL := KUBECONFIG=$(KUBECONFIG) kubectl --context $(KUBE_CONTEXT)
 HELM := KUBECONFIG=$(KUBECONFIG) helm --kube-context $(KUBE_CONTEXT)
-
-# Helper to check if cluster exists
-define cluster-exists
-	@kind get clusters 2>/dev/null | grep -q "^$(CLUSTER_NAME)$$"
-endef
 
 ## Create Kind cluster if it doesn't exist
 cluster/up: docker/check
@@ -98,96 +94,30 @@ cluster/down: docker/check
 	fi
 .PHONY: cluster/down
 
-## Check if cluster is running and healthy
-cluster/status:
+## Check if Kind cluster exists (fails if not)
+kind/check:
 	@if ! kind get clusters 2>/dev/null | grep -q "^$(CLUSTER_NAME)$$"; then \
-		echo "[ERROR] Cluster '$(CLUSTER_NAME)' does not exist"; \
+		echo "[ERROR] Cluster '$(CLUSTER_NAME)' does not exist. Run 'make up' first."; \
 		exit 1; \
 	fi
+.PHONY: kind/check
+
+## Check if cluster is running and healthy
+cluster/status: kind/check
 	@echo "[INFO] Cluster '$(CLUSTER_NAME)' is running"
 	@$(KUBECTL) cluster-info
 .PHONY: cluster/status
 
 #-------------------------------------------------------------------------------
-# Metrics Server
-#-------------------------------------------------------------------------------
-
-METRICS_CHART := ./charts/metrics-server
-METRICS_NAMESPACE := kube-system
-METRICS_RELEASE := metrics-server
-
-## Install metrics-server (idempotent)
-metrics-server/install: cluster/up
-	@if ! $(KUBECTL) get --raw /apis/metrics.k8s.io > /dev/null 2>&1; then \
-		echo "[INFO] Installing metrics-server"; \
-		$(HELM) upgrade --install $(METRICS_RELEASE) $(METRICS_CHART) \
-			-n $(METRICS_NAMESPACE) --create-namespace --wait --timeout=$(WAIT_TIMEOUT_MEDIUM); \
-	else \
-		echo "[INFO] metrics-server already installed"; \
-	fi
-.PHONY: metrics-server/install
-
-## Uninstall metrics-server
-metrics-server/uninstall:
-	@if kind get clusters 2>/dev/null | grep -q "^$(CLUSTER_NAME)$$"; then \
-		if $(KUBECTL) get --raw /apis/metrics.k8s.io > /dev/null 2>&1; then \
-			echo "[INFO] Uninstalling metrics-server"; \
-			$(HELM) uninstall $(METRICS_RELEASE) -n $(METRICS_NAMESPACE) 2>/dev/null || true; \
-		else \
-			echo "[INFO] metrics-server not installed"; \
-		fi \
-	else \
-		echo "[INFO] Cluster does not exist, skipping uninstall"; \
-	fi
-.PHONY: metrics-server/uninstall
-
-## Reinstall metrics-server
-metrics-server/reinstall: metrics-server/uninstall metrics-server/install
-.PHONY: metrics-server/reinstall
-
-#-------------------------------------------------------------------------------
 # Prometheus
 #-------------------------------------------------------------------------------
+# Managed by ArgoCD - see argocd/apps/prometheus.yaml
 
-PROMETHEUS_CHART := ./charts/prometheus
 PROMETHEUS_NAMESPACE := monitoring
 PROMETHEUS_RELEASE := prometheus-community
 
-## Install Prometheus (idempotent)
-prometheus/install: cluster/up
-	@if ! $(KUBECTL) get deployment -n $(PROMETHEUS_NAMESPACE) $(PROMETHEUS_RELEASE)-server > /dev/null 2>&1; then \
-		echo "[INFO] Installing Prometheus"; \
-		$(HELM) upgrade --install $(PROMETHEUS_RELEASE) $(PROMETHEUS_CHART) \
-			-n $(PROMETHEUS_NAMESPACE) --create-namespace --wait --timeout=$(WAIT_TIMEOUT_MEDIUM); \
-	else \
-		echo "[INFO] Prometheus already installed"; \
-	fi
-.PHONY: prometheus/install
-
-## Uninstall Prometheus
-prometheus/uninstall:
-	@if kind get clusters 2>/dev/null | grep -q "^$(CLUSTER_NAME)$$"; then \
-		if $(KUBECTL) get namespace $(PROMETHEUS_NAMESPACE) > /dev/null 2>&1; then \
-			echo "[INFO] Uninstalling Prometheus"; \
-			$(HELM) uninstall $(PROMETHEUS_RELEASE) -n $(PROMETHEUS_NAMESPACE) 2>/dev/null || true; \
-		else \
-			echo "[INFO] Prometheus not installed"; \
-		fi \
-	else \
-		echo "[INFO] Cluster does not exist, skipping uninstall"; \
-	fi
-.PHONY: prometheus/uninstall
-
-## Reinstall Prometheus
-prometheus/reinstall: prometheus/uninstall prometheus/install
-.PHONY: prometheus/reinstall
-
 ## Port forward to Prometheus UI (http://localhost:9090)
-prometheus/ui:
-	@if ! kind get clusters 2>/dev/null | grep -q "^$(CLUSTER_NAME)$$"; then \
-		echo "[ERROR] Cluster does not exist. Run 'make up' first."; \
-		exit 1; \
-	fi
+prometheus/ui: kind/check
 	@echo "[INFO] Port forwarding to Prometheus UI at http://localhost:9090"
 	@echo "[INFO] Press Ctrl+C to stop"
 	@$(KUBECTL) port-forward -n $(PROMETHEUS_NAMESPACE) \
@@ -195,189 +125,108 @@ prometheus/ui:
 .PHONY: prometheus/ui
 
 #-------------------------------------------------------------------------------
-# Vertical Pod Autoscaler (VPA)
+# ArgoCD
 #-------------------------------------------------------------------------------
 
-VPA_CHART := ./charts/vertical-pod-autoscaler
-VPA_NAMESPACE := kube-system
-VPA_RELEASE := vertical-pod-autoscaler
+ARGOCD_NAMESPACE := argocd
+ARGOCD_VERSION := v2.13.3
 
-## Install Vertical Pod Autoscaler (idempotent)
-vpa/install: cluster/up
-	@if ! $(KUBECTL) get deployment -n $(VPA_NAMESPACE) $(VPA_RELEASE)-recommender > /dev/null 2>&1; then \
-		echo "[INFO] Installing Vertical Pod Autoscaler"; \
-		$(HELM) upgrade --install $(VPA_RELEASE) $(VPA_CHART) \
-			-n $(VPA_NAMESPACE) --create-namespace --wait --timeout=$(WAIT_TIMEOUT_LONG); \
+## Install ArgoCD (idempotent)
+argocd/install: cluster/up
+	@if ! $(KUBECTL) get namespace $(ARGOCD_NAMESPACE) > /dev/null 2>&1; then \
+		echo "[INFO] Installing ArgoCD $(ARGOCD_VERSION)"; \
+		$(KUBECTL) create namespace $(ARGOCD_NAMESPACE); \
+		$(KUBECTL) apply -n $(ARGOCD_NAMESPACE) -f https://raw.githubusercontent.com/argoproj/argo-cd/$(ARGOCD_VERSION)/manifests/install.yaml; \
+		echo "[INFO] Waiting for ArgoCD to be ready..."; \
+		$(KUBECTL) wait --for=condition=Available --timeout=$(WAIT_TIMEOUT_LONG) -n $(ARGOCD_NAMESPACE) deployment/argocd-server 2>/dev/null || true; \
+		$(KUBECTL) wait --for=condition=Available --timeout=$(WAIT_TIMEOUT_LONG) -n $(ARGOCD_NAMESPACE) deployment/argocd-repo-server 2>/dev/null || true; \
+		$(KUBECTL) wait --for=condition=Available --timeout=$(WAIT_TIMEOUT_LONG) -n $(ARGOCD_NAMESPACE) deployment/argocd-applicationset-controller 2>/dev/null || true; \
+		echo "[INFO] ArgoCD installed successfully"; \
 	else \
-		echo "[INFO] VPA already installed"; \
+		echo "[INFO] ArgoCD already installed"; \
 	fi
-.PHONY: vpa/install
+.PHONY: argocd/install
 
-## Uninstall VPA
-vpa/uninstall:
+## Uninstall ArgoCD
+argocd/uninstall:
 	@if kind get clusters 2>/dev/null | grep -q "^$(CLUSTER_NAME)$$"; then \
-		if $(KUBECTL) get deployment -n $(VPA_NAMESPACE) $(VPA_RELEASE)-recommender > /dev/null 2>&1; then \
-			echo "[INFO] Uninstalling VPA"; \
-			$(HELM) uninstall $(VPA_RELEASE) -n $(VPA_NAMESPACE) 2>/dev/null || true; \
+		if $(KUBECTL) get namespace $(ARGOCD_NAMESPACE) > /dev/null 2>&1; then \
+			echo "[INFO] Uninstalling ArgoCD"; \
+			$(KUBECTL) delete -n $(ARGOCD_NAMESPACE) -f https://raw.githubusercontent.com/argoproj/argo-cd/$(ARGOCD_VERSION)/manifests/install.yaml 2>/dev/null || true; \
+			$(KUBECTL) delete namespace $(ARGOCD_NAMESPACE) 2>/dev/null || true; \
 		else \
-			echo "[INFO] VPA not installed"; \
+			echo "[INFO] ArgoCD not installed"; \
 		fi \
 	else \
 		echo "[INFO] Cluster does not exist, skipping uninstall"; \
 	fi
-.PHONY: vpa/uninstall
+.PHONY: argocd/uninstall
 
-## Reinstall VPA
-vpa/reinstall: vpa/uninstall vpa/install
-.PHONY: vpa/reinstall
+## Get ArgoCD admin password
+argocd/password: kind/check
+	@echo "[INFO] ArgoCD admin password:"
+	@$(KUBECTL) -n $(ARGOCD_NAMESPACE) get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d && echo
+.PHONY: argocd/password
 
-#-------------------------------------------------------------------------------
-# Cert Manager (required by Flink Operator)
-#-------------------------------------------------------------------------------
+## Port forward to ArgoCD UI (http://localhost:8080)
+argocd/ui: kind/check
+	@echo "[INFO] Port forwarding to ArgoCD UI at http://localhost:8080"
+	@echo "[INFO] Username: admin"
+	@echo "[INFO] Password: run 'make argocd/password' to get the password"
+	@echo "[INFO] Press Ctrl+C to stop"
+	@$(KUBECTL) port-forward -n $(ARGOCD_NAMESPACE) svc/argocd-server 8080:443
+.PHONY: argocd/ui
 
-CERT_MANAGER_NAMESPACE := cert-manager
-CERT_MANAGER_VERSION := v1.8.2
+## Deploy all applications via ArgoCD
+argocd/deploy-apps: argocd/install
+	@echo "[INFO] Deploying applications via ArgoCD"
+	@$(KUBECTL) apply -f argocd/apps/
+	@echo "[INFO] Applications deployed. Check status with: make argocd/status"
+.PHONY: argocd/deploy-apps
 
-## Install cert-manager (idempotent)
-cert-manager/install: cluster/up
-	@if ! $(KUBECTL) get namespace $(CERT_MANAGER_NAMESPACE) > /dev/null 2>&1; then \
-		echo "[INFO] Installing cert-manager $(CERT_MANAGER_VERSION)"; \
-		$(KUBECTL) create -f https://github.com/jetstack/cert-manager/releases/download/$(CERT_MANAGER_VERSION)/cert-manager.yaml; \
-		echo "[INFO] Waiting for cert-manager to be ready..."; \
-		$(KUBECTL) wait --for=condition=Available --timeout=$(WAIT_TIMEOUT_MEDIUM) -n $(CERT_MANAGER_NAMESPACE) deployment/cert-manager 2>/dev/null || true; \
-		$(KUBECTL) wait --for=condition=Available --timeout=$(WAIT_TIMEOUT_MEDIUM) -n $(CERT_MANAGER_NAMESPACE) deployment/cert-manager-webhook 2>/dev/null || true; \
-		$(KUBECTL) wait --for=condition=Available --timeout=$(WAIT_TIMEOUT_MEDIUM) -n $(CERT_MANAGER_NAMESPACE) deployment/cert-manager-cainjector 2>/dev/null || true; \
-		echo "[INFO] cert-manager installed successfully"; \
-	else \
-		echo "[INFO] cert-manager already installed"; \
-	fi
-.PHONY: cert-manager/install
-
-## Uninstall cert-manager
-cert-manager/uninstall:
-	@if kind get clusters 2>/dev/null | grep -q "^$(CLUSTER_NAME)$$"; then \
-		if $(KUBECTL) get namespace $(CERT_MANAGER_NAMESPACE) > /dev/null 2>&1; then \
-			echo "[INFO] Uninstalling cert-manager"; \
-			$(KUBECTL) delete -f https://github.com/jetstack/cert-manager/releases/download/$(CERT_MANAGER_VERSION)/cert-manager.yaml 2>/dev/null || true; \
-		else \
-			echo "[INFO] cert-manager not installed"; \
-		fi \
-	else \
-		echo "[INFO] Cluster does not exist, skipping uninstall"; \
-	fi
-.PHONY: cert-manager/uninstall
-
-## Reinstall cert-manager
-cert-manager/reinstall: cert-manager/uninstall cert-manager/install
-.PHONY: cert-manager/reinstall
-
-#-------------------------------------------------------------------------------
-# Flink Kubernetes Operator
-#-------------------------------------------------------------------------------
-
-FLINK_OPERATOR_NAMESPACE := flink-operator
-FLINK_OPERATOR_RELEASE := flink-kubernetes-operator
-FLINK_OPERATOR_VERSION := 1.12.1
-FLINK_OPERATOR_CHART_URL := https://downloads.apache.org/flink/flink-kubernetes-operator-$(FLINK_OPERATOR_VERSION)/flink-kubernetes-operator-$(FLINK_OPERATOR_VERSION)-helm.tgz
-
-## Install Flink Kubernetes Operator (idempotent)
-flink-operator/install: cert-manager/install
-	@if ! $(KUBECTL) get deployment -n $(FLINK_OPERATOR_NAMESPACE) $(FLINK_OPERATOR_RELEASE) > /dev/null 2>&1; then \
-		echo "[INFO] Installing Flink Kubernetes Operator $(FLINK_OPERATOR_VERSION)"; \
-		$(KUBECTL) create namespace $(FLINK_OPERATOR_NAMESPACE) 2>/dev/null || true; \
-		$(HELM) upgrade --install $(FLINK_OPERATOR_RELEASE) $(FLINK_OPERATOR_CHART_URL) \
-			-n $(FLINK_OPERATOR_NAMESPACE) --create-namespace --wait --timeout=$(WAIT_TIMEOUT_LONG); \
-		echo "[INFO] Waiting for FlinkDeployment CRD to be ready..."; \
-		$(KUBECTL) wait --for condition=established --timeout=60s crd/flinkdeployments.flink.apache.org; \
-		echo "[INFO] Flink Operator installed successfully"; \
-	else \
-		echo "[INFO] Flink Operator already installed"; \
-	fi
-.PHONY: flink-operator/install
-
-## Uninstall Flink Operator
-flink-operator/uninstall:
-	@if kind get clusters 2>/dev/null | grep -q "^$(CLUSTER_NAME)$$"; then \
-		if $(KUBECTL) get namespace $(FLINK_OPERATOR_NAMESPACE) > /dev/null 2>&1; then \
-			echo "[INFO] Uninstalling Flink Operator"; \
-			$(HELM) uninstall $(FLINK_OPERATOR_RELEASE) -n $(FLINK_OPERATOR_NAMESPACE) 2>/dev/null || true; \
-			$(KUBECTL) delete namespace $(FLINK_OPERATOR_NAMESPACE) 2>/dev/null || true; \
-		else \
-			echo "[INFO] Flink Operator not installed"; \
-		fi \
-	else \
-		echo "[INFO] Cluster does not exist, skipping uninstall"; \
-	fi
-.PHONY: flink-operator/uninstall
-
-## Reinstall Flink Operator
-flink-operator/reinstall: flink-operator/uninstall flink-operator/install
-.PHONY: flink-operator/reinstall
+## Show ArgoCD application status
+argocd/status: kind/check
+	@echo "=== ArgoCD Applications ==="
+	@$(KUBECTL) get applications -n $(ARGOCD_NAMESPACE) 2>/dev/null || echo "No applications found"
+.PHONY: argocd/status
 
 #-------------------------------------------------------------------------------
 # Flink
 #-------------------------------------------------------------------------------
+# Managed by ArgoCD - see argocd/apps/flink-autoscale.yaml
 
 FLINK_RELEASE := flink-autoscale
-FLINK_CHART := ./charts/flink-autoscale
 FLINK_NAMESPACE := flink
 
 APP_DIR := services/autoscaling-load-job
 APP_POM := $(APP_DIR)/pom.xml
 APP_JAR := $(APP_DIR)/target/autoscaling-load-job.jar
 
-## Install Flink Autoscale application (idempotent)
-flink/install: cluster/up docker/load
-	@echo "[INFO] Installing Flink Autoscale Helm chart"
-	@$(HELM) upgrade --install $(FLINK_RELEASE) $(FLINK_CHART) \
-		-n $(FLINK_NAMESPACE) --create-namespace --wait --timeout=$(WAIT_TIMEOUT_MEDIUM)
-	@echo "[INFO] Flink installed successfully"
-.PHONY: flink/install
-
-## Uninstall Flink Autoscale application
-flink/uninstall:
-	@if kind get clusters 2>/dev/null | grep -q "^$(CLUSTER_NAME)$$"; then \
-		if $(KUBECTL) get namespace $(FLINK_NAMESPACE) > /dev/null 2>&1; then \
-			echo "[INFO] Uninstalling Flink"; \
-			$(HELM) uninstall $(FLINK_RELEASE) -n $(FLINK_NAMESPACE) 2>/dev/null || true; \
-		else \
-			echo "[INFO] Flink not installed"; \
-		fi \
-	else \
-		echo "[INFO] Cluster does not exist, skipping uninstall"; \
-	fi
-.PHONY: flink/uninstall
-
-## Reinstall Flink Autoscale application
-flink/reinstall: flink/uninstall flink/install
-.PHONY: flink/reinstall
-
 # -----------------------------
 # Full bootstrap (one command)
 # -----------------------------
 
-## Bootstrap entire environment (cluster + all components)
-up: cluster/up metrics-server/install prometheus/install vpa/install flink-operator/install flink/install
+## Bootstrap entire environment using ArgoCD (cluster + ArgoCD + all components)
+up: cluster/up argocd/install argocd/deploy-apps
 	@echo ""
 	@echo "=== Environment Ready ==="
+	@echo "ArgoCD UI:     make argocd/ui (then visit http://localhost:8080)"
+	@echo "  Username:    admin"
+	@echo "  Password:    make argocd/password"
 	@echo "Flink UI:      make flink/ui (then visit http://localhost:8081)"
 	@echo "Prometheus UI: make prometheus/ui (then visit http://localhost:9090)"
 	@echo "Cluster:       kind get clusters"
 	@echo "Status:        make status"
+	@echo "ArgoCD Apps:   make argocd/status"
 	@echo "Flink Status:  make status/flink"
 	@echo ""
 .PHONY: up
 
-## Tear down entire environment (uninstall all + delete cluster)
+## Tear down entire environment (delete cluster)
 down:
 	@echo "[INFO] Tearing down environment..."
 	@if kind get clusters 2>/dev/null | grep -q "^$(CLUSTER_NAME)$$"; then \
-		$(MAKE) flink/uninstall || true; \
-		$(MAKE) flink-operator/uninstall || true; \
-		$(MAKE) cert-manager/uninstall || true; \
-		$(MAKE) vpa/uninstall || true; \
-		$(MAKE) prometheus/uninstall || true; \
-		$(MAKE) metrics-server/uninstall || true; \
+		echo "[INFO] Deleting Kind cluster (this will remove all ArgoCD-managed apps)"; \
 		$(MAKE) cluster/down; \
 	else \
 		echo "[INFO] Cluster does not exist, nothing to tear down"; \
@@ -433,11 +282,7 @@ docker/build: maven/build docker/check
 .PHONY: docker/build
 
 ## Load Docker image into Kind cluster
-docker/load:
-	@if ! kind get clusters 2>/dev/null | grep -q "^$(CLUSTER_NAME)$$"; then \
-		echo "[ERROR] Cluster '$(CLUSTER_NAME)' does not exist. Run 'make cluster/up' first."; \
-		exit 1; \
-	fi
+docker/load: kind/check
 	@if ! docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "^$(DOCKER_IMAGE_FULL)$$"; then \
 		echo "[INFO] Image $(DOCKER_IMAGE_FULL) not found locally, building..."; \
 		$(MAKE) docker/build; \
@@ -463,11 +308,7 @@ docker/clean:
 # -----------------------------
 
 ## Show cluster status (nodes and all pods)
-status:
-	@if ! kind get clusters 2>/dev/null | grep -q "^$(CLUSTER_NAME)$$"; then \
-		echo "[ERROR] Cluster '$(CLUSTER_NAME)' does not exist. Run 'make cluster/up' first."; \
-		exit 1; \
-	fi
+status: kind/check
 	@echo "=== Cluster Status ==="
 	@$(KUBECTL) get nodes
 	@echo ""
@@ -479,13 +320,9 @@ status:
 .PHONY: status
 
 ## Show detailed Flink status
-status/flink:
-	@if ! kind get clusters 2>/dev/null | grep -q "^$(CLUSTER_NAME)$$"; then \
-		echo "[ERROR] Cluster '$(CLUSTER_NAME)' does not exist. Run 'make cluster/up' first."; \
-		exit 1; \
-	fi
+status/flink: kind/check
 	@if ! $(KUBECTL) get namespace $(FLINK_NAMESPACE) > /dev/null 2>&1; then \
-		echo "[ERROR] Flink namespace does not exist. Run 'make flink/install' first."; \
+		echo "[ERROR] Flink namespace does not exist. Run 'make up' first."; \
 		exit 1; \
 	fi
 	@echo "=== Flink Deployments (Operator Managed) ==="
@@ -505,11 +342,7 @@ status/flink:
 .PHONY: status/flink
 
 ## Describe all Flink resources
-flink/describe:
-	@if ! kind get clusters 2>/dev/null | grep -q "^$(CLUSTER_NAME)$$"; then \
-		echo "[ERROR] Cluster does not exist"; \
-		exit 1; \
-	fi
+flink/describe: kind/check
 	@echo "=== Describing Flink Resources ==="
 	@$(KUBECTL) describe flinkdeployments -n $(FLINK_NAMESPACE) 2>/dev/null || echo "No FlinkDeployments found"
 	@$(KUBECTL) describe pods -n $(FLINK_NAMESPACE) 2>/dev/null || true
@@ -518,21 +351,13 @@ flink/describe:
 .PHONY: flink/describe
 
 ## Show Flink namespace events
-flink/events:
-	@if ! kind get clusters 2>/dev/null | grep -q "^$(CLUSTER_NAME)$$"; then \
-		echo "[ERROR] Cluster does not exist"; \
-		exit 1; \
-	fi
+flink/events: kind/check
 	@echo "=== Flink Namespace Events ==="
 	@$(KUBECTL) get events -n $(FLINK_NAMESPACE) --sort-by='.lastTimestamp'
 .PHONY: flink/events
 
 ## Port forward to Flink UI (http://localhost:8081)
-flink/ui:
-	@if ! kind get clusters 2>/dev/null | grep -q "^$(CLUSTER_NAME)$$"; then \
-		echo "[ERROR] Cluster does not exist. Run 'make up' first."; \
-		exit 1; \
-	fi
+flink/ui: kind/check
 	@echo "[INFO] Port forwarding to Flink UI at http://localhost:8081"
 	@echo "[INFO] Press Ctrl+C to stop"
 	@$(KUBECTL) port-forward -n $(FLINK_NAMESPACE) \
@@ -540,31 +365,19 @@ flink/ui:
 .PHONY: flink/ui
 
 ## Tail Flink JobManager logs
-logs/flink-jm:
-	@if ! kind get clusters 2>/dev/null | grep -q "^$(CLUSTER_NAME)$$"; then \
-		echo "[ERROR] Cluster does not exist"; \
-		exit 1; \
-	fi
+logs/flink-jm: kind/check
 	@$(KUBECTL) logs -n $(FLINK_NAMESPACE) \
 		-l app.kubernetes.io/component=jobmanager --tail=100 -f
 .PHONY: logs/flink-jm
 
 ## Tail Flink TaskManager logs
-logs/flink-tm:
-	@if ! kind get clusters 2>/dev/null | grep -q "^$(CLUSTER_NAME)$$"; then \
-		echo "[ERROR] Cluster does not exist"; \
-		exit 1; \
-	fi
+logs/flink-tm: kind/check
 	@$(KUBECTL) logs -n $(FLINK_NAMESPACE) \
 		-l app.kubernetes.io/component=taskmanager --tail=100 -f
 .PHONY: logs/flink-tm
 
 ## Tail all Flink logs (JobManager + TaskManager)
-logs/flink:
-	@if ! kind get clusters 2>/dev/null | grep -q "^$(CLUSTER_NAME)$$"; then \
-		echo "[ERROR] Cluster does not exist"; \
-		exit 1; \
-	fi
+logs/flink: kind/check
 	@$(KUBECTL) logs -n $(FLINK_NAMESPACE) \
 		-l app.kubernetes.io/name=flink-autoscale --tail=100 -f
 .PHONY: logs/flink
