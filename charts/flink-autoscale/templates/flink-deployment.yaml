@@ -38,6 +38,17 @@ spec:
               limits:
                 cpu: {{ default $.Values.defaults.jobManager.resources.limits.cpu $job.jobManager.resources.limits.cpu | default $.Values.defaults.jobManager.resources.limits.cpu | quote }}
                 memory: {{ default $.Values.defaults.jobManager.resources.limits.memory $job.jobManager.resources.limits.memory | default $.Values.defaults.jobManager.resources.limits.memory | quote }}
+            volumeMounts:
+              - name: flink-state
+                mountPath: /opt/flink/state
+        volumes:
+          - name: flink-state
+            {{- if $.Values.defaults.persistence.enabled }}
+            persistentVolumeClaim:
+              claimName: {{ include "flink-autoscale.fullname" $ }}-{{ $job.name }}-state
+            {{- else }}
+            emptyDir: {}
+            {{- end }}
 
   taskManager:
     replicas: {{ default $.Values.defaults.taskManager.replicas $job.taskManager.replicas | default $.Values.defaults.taskManager.replicas }}
