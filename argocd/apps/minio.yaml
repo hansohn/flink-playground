@@ -13,7 +13,7 @@ spec:
     path: charts/minio
   destination:
     server: https://kubernetes.default.svc
-    namespace: flink
+    namespace: storage
   syncPolicy:
     automated:
       prune: true

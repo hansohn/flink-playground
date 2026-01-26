@@ -128,17 +128,17 @@ jobs:
 
     # Additional Flink configuration
     # Using RocksDB state backend with MinIO (S3-compatible) for state durability
-    # MinIO provides production-like object storage for POC testing
+    # MinIO runs in 'storage' namespace, provides production-like object storage for POC
     # State persists across pod deletions, scaling events, and image updates
     # For production: Change endpoint to AWS S3, update credentials, disable path-style access
     flinkConfiguration:
       state.backend.type: rocksdb
       state.backend.incremental: "true"
-      # MinIO S3-compatible storage
+      # MinIO S3-compatible storage (cross-namespace access)
       state.checkpoints.dir: s3://flink-state/checkpoints/autoscaling-load
       state.savepoints.dir: s3://flink-state/savepoints/autoscaling-load
-      # MinIO endpoint and credentials
-      s3.endpoint: http://minio.flink.svc.cluster.local:9000
+      # MinIO endpoint and credentials (storage namespace)
+      s3.endpoint: http://minio.storage.svc.cluster.local:9000
       s3.path.style.access: "true"
       s3.access-key: admin
       s3.secret-key: password123
