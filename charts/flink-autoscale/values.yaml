@@ -86,7 +86,7 @@ jobs:
       upgradeMode: savepoint
       # Allow job to start even if savepoint is incomplete
       allowNonRestoredState: true
-      state: running
+      state: suspended
       args: []
 
     # Override resources if needed
