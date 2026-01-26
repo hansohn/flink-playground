@@ -60,6 +60,12 @@ spec:
               limits:
                 cpu: {{ default $.Values.defaults.taskManager.resources.limits.cpu $job.taskManager.resources.limits.cpu | default $.Values.defaults.taskManager.resources.limits.cpu | quote }}
                 memory: {{ default $.Values.defaults.taskManager.resources.limits.memory $job.taskManager.resources.limits.memory | default $.Values.defaults.taskManager.resources.limits.memory | quote }}
+            volumeMounts:
+              - name: flink-state
+                mountPath: /opt/flink/state
+        volumes:
+          - name: flink-state
+            emptyDir: {}
 
   flinkConfiguration:
     taskmanager.numberOfTaskSlots: "{{ default $.Values.defaults.taskManager.slots $job.taskManager.slots | default $.Values.defaults.taskManager.slots }}"

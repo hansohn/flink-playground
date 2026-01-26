@@ -73,6 +73,7 @@ jobs:
       entryClass: "com.example.flink.AutoscalingLoadJob"
       parallelism: 2
       # Use last-state to preserve autoscaler decisions across image updates
+      # RocksDB + persistent volume ensures checkpoints survive pod restarts
       upgradeMode: last-state
       state: running
       args: []
@@ -114,16 +115,21 @@ jobs:
       maxParallelism: 10
 
     # Additional Flink configuration
-    # Note: Using in-memory state backend and local filesystem for playground simplicity
+    # Using RocksDB state backend with persistent volume for state durability
+    # Autoscaler parallelism decisions persisted in ConfigMap + checkpoints
+    # State survives pod restarts (within same node for emptyDir volume)
     # For production:
-    # - Use RocksDB state backend for large state
-    # - Use persistent storage (S3, HDFS, etc.) for checkpoints/savepoints
-    # - This preserves autoscaler decisions across image updates
+    # - Use PersistentVolumeClaim instead of emptyDir
+    # - Use remote storage (S3, HDFS, etc.) for checkpoints/savepoints
+    # - Configure RocksDB tuning parameters
     flinkConfiguration:
-      state.backend.type: hashmap
-      state.checkpoints.dir: file:///tmp/flink-checkpoints
-      state.savepoints.dir: file:///tmp/flink-savepoints
+      state.backend.type: rocksdb
+      state.backend.incremental: "true"
+      state.checkpoints.dir: file:///opt/flink/state/checkpoints
+      state.savepoints.dir: file:///opt/flink/state/savepoints
       execution.checkpointing.interval: "30s"
+      # Retain checkpoints when job is cancelled (for last-state/savepoint modes)
+      execution.checkpointing.externalized-checkpoint-retention: RETAIN_ON_CANCELLATION
       # Prometheus metrics reporter
       metrics.reporter.prom.factory.class: org.apache.flink.metrics.prometheus.PrometheusReporterFactory
       metrics.reporter.prom.port: "9249"
