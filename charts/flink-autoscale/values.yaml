@@ -79,9 +79,13 @@ jobs:
       jarURI: "local:///opt/flink/usrlib/autoscaling-load-job.jar"
       entryClass: "com.example.flink.AutoscalingLoadJob"
       parallelism: 2
-      # Use last-state to preserve autoscaler decisions and job state across restarts
-      # PersistentVolumeClaim ensures checkpoints survive pod deletion
-      upgradeMode: last-state
+      # Use savepoint mode for reliable restarts during scaling events
+      # Creates explicit savepoint before suspending (more reliable than last-state)
+      # Falls back gracefully if savepoint missing or incomplete
+      # Autoscaler parallelism decisions persist in FlinkDeployment spec + ConfigMap
+      upgradeMode: savepoint
+      # Allow job to start even if savepoint is incomplete
+      allowNonRestoredState: true
       state: running
       args: []
 
