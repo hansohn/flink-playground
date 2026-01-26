@@ -51,7 +51,7 @@ spec:
             {{- end }}
 
   taskManager:
-    replicas: {{ default $.Values.defaults.taskManager.replicas $job.taskManager.replicas | default $.Values.defaults.taskManager.replicas }}
+    # Note: replicas not set in Native mode - let Flink dynamically provision TaskManagers based on slot requirements
     resource:
       memory: {{ if $job.taskManager }}{{ default $.Values.defaults.taskManager.memory $job.taskManager.memory | default $.Values.defaults.taskManager.memory | quote }}{{ else }}{{ $.Values.defaults.taskManager.memory | quote }}{{ end }}
       cpu: {{ if $job.taskManager }}{{ default $.Values.defaults.taskManager.cpu $job.taskManager.cpu | default $.Values.defaults.taskManager.cpu }}{{ else }}{{ $.Values.defaults.taskManager.cpu }}{{ end }}
