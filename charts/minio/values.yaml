@@ -1,0 +1,48 @@
+# MinIO configuration for Flink state backend
+# Provides S3-compatible object storage for POC testing
+# For production, migrate to AWS S3, Google Cloud Storage, or Azure Blob Storage
+
+minio:
+  # Deployment mode (standalone for POC, distributed for production)
+  mode: standalone
+  replicas: 1
+
+  # Root credentials
+  rootUser: admin
+  rootPassword: password123
+
+  # Persistence
+  persistence:
+    enabled: true
+    storageClass: standard  # Kind's local-path provisioner
+    size: 10Gi
+
+  # Resource limits
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  # Service configuration
+  service:
+    type: ClusterIP  # Internal only
+    port: 9000
+
+  # Console (MinIO web UI)
+  consoleService:
+    type: ClusterIP
+    port: 9001
+
+  # Pre-create buckets for Flink
+  buckets:
+    - name: flink-state
+      policy: none
+      purge: false
+
+  # Enable Prometheus metrics (optional)
+  metrics:
+    serviceMonitor:
+      enabled: false  # Enable if Prometheus Operator is available

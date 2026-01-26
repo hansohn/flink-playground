@@ -7,9 +7,10 @@ defaults:
     pullPolicy: IfNotPresent
 
   # Persistent storage for Flink state (checkpoints/savepoints)
-  # Survives pod deletion and enables proper state recovery
+  # DISABLED: Now using MinIO (S3-compatible) for state storage
+  # PVC-based storage is only suitable for POC, not production
   persistence:
-    enabled: true
+    enabled: false
     storageClassName: "standard"  # Kind's local-path provisioner
     size: "1Gi"
 
@@ -68,10 +69,10 @@ jobs:
   - name: autoscaling-load
     enabled: true
 
-    # Use custom image with JAR bundled
+    # Use custom image with JAR bundled (includes S3 plugin for MinIO)
     image:
       repository: flink-autoscaling-load
-      tag: "1.0.0"
+      tag: "1.0.1"
       pullPolicy: IfNotPresent
 
     # Job specification (Application Mode)
@@ -126,18 +127,22 @@ jobs:
       maxParallelism: 10
 
     # Additional Flink configuration
-    # Using RocksDB state backend with PersistentVolumeClaim for state durability
-    # Autoscaler parallelism decisions + job state persist across pod deletions
-    # PVC ensures state survives pod restarts, scaling events, and image updates
-    # For production:
-    # - Use remote storage (S3, HDFS, etc.) for disaster recovery
-    # - Configure RocksDB tuning parameters for workload
-    # - Increase PVC size for large state
+    # Using RocksDB state backend with MinIO (S3-compatible) for state durability
+    # MinIO provides production-like object storage for POC testing
+    # State persists across pod deletions, scaling events, and image updates
+    # For production: Change endpoint to AWS S3, update credentials, disable path-style access
     flinkConfiguration:
       state.backend.type: rocksdb
       state.backend.incremental: "true"
-      state.checkpoints.dir: file:///opt/flink/state/checkpoints
-      state.savepoints.dir: file:///opt/flink/state/savepoints
+      # MinIO S3-compatible storage
+      state.checkpoints.dir: s3://flink-state/checkpoints/autoscaling-load
+      state.savepoints.dir: s3://flink-state/savepoints/autoscaling-load
+      # MinIO endpoint and credentials
+      s3.endpoint: http://minio.flink.svc.cluster.local:9000
+      s3.path.style.access: "true"
+      s3.access-key: admin
+      s3.secret-key: password123
+      s3.connection.ssl.enabled: "false"
       execution.checkpointing.interval: "30s"
       # Retain checkpoints when job is cancelled (for last-state/savepoint modes)
       execution.checkpointing.externalized-checkpoint-retention: RETAIN_ON_CANCELLATION

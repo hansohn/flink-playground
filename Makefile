@@ -51,6 +51,7 @@ validate/charts:
 	@helm lint ./charts/prometheus || true
 	@helm lint ./charts/vertical-pod-autoscaler || true
 	@helm lint ./charts/flink-autoscale || true
+	@helm lint ./charts/minio || true
 	@echo "[INFO] Chart validation complete"
 .PHONY: validate/charts
 
@@ -271,7 +272,7 @@ maven/build-shaded:
 # -----------------------------
 
 DOCKER_IMAGE_NAME := flink-autoscaling-load
-DOCKER_IMAGE_TAG := 1.0.0
+DOCKER_IMAGE_TAG := 1.0.1
 DOCKER_IMAGE_FULL := $(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_TAG)
 
 ## Build Docker image with JAR
