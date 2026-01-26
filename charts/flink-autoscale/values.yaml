@@ -6,6 +6,13 @@ defaults:
     tag: "1.18-scala_2.12"
     pullPolicy: IfNotPresent
 
+  # Persistent storage for Flink state (checkpoints/savepoints)
+  # Survives pod deletion and enables proper state recovery
+  persistence:
+    enabled: true
+    storageClassName: "standard"  # Kind's local-path provisioner
+    size: "1Gi"
+
   jobManager:
     replicas: 1
     # CPU for Flink resource spec (numeric, in cores)
@@ -72,8 +79,8 @@ jobs:
       jarURI: "local:///opt/flink/usrlib/autoscaling-load-job.jar"
       entryClass: "com.example.flink.AutoscalingLoadJob"
       parallelism: 2
-      # Use last-state to preserve autoscaler decisions across image updates
-      # RocksDB + persistent volume ensures checkpoints survive pod restarts
+      # Use last-state to preserve autoscaler decisions and job state across restarts
+      # PersistentVolumeClaim ensures checkpoints survive pod deletion
       upgradeMode: last-state
       state: running
       args: []
@@ -115,13 +122,13 @@ jobs:
       maxParallelism: 10
 
     # Additional Flink configuration
-    # Using RocksDB state backend with persistent volume for state durability
-    # Autoscaler parallelism decisions persisted in ConfigMap + checkpoints
-    # State survives pod restarts (within same node for emptyDir volume)
+    # Using RocksDB state backend with PersistentVolumeClaim for state durability
+    # Autoscaler parallelism decisions + job state persist across pod deletions
+    # PVC ensures state survives pod restarts, scaling events, and image updates
     # For production:
-    # - Use PersistentVolumeClaim instead of emptyDir
-    # - Use remote storage (S3, HDFS, etc.) for checkpoints/savepoints
-    # - Configure RocksDB tuning parameters
+    # - Use remote storage (S3, HDFS, etc.) for disaster recovery
+    # - Configure RocksDB tuning parameters for workload
+    # - Increase PVC size for large state
     flinkConfiguration:
       state.backend.type: rocksdb
       state.backend.incremental: "true"

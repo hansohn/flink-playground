@@ -65,7 +65,12 @@ spec:
                 mountPath: /opt/flink/state
         volumes:
           - name: flink-state
+            {{- if $.Values.defaults.persistence.enabled }}
+            persistentVolumeClaim:
+              claimName: {{ include "flink-autoscale.fullname" $ }}-{{ $job.name }}-state
+            {{- else }}
             emptyDir: {}
+            {{- end }}
 
   flinkConfiguration:
     taskmanager.numberOfTaskSlots: "{{ default $.Values.defaults.taskManager.slots $job.taskManager.slots | default $.Values.defaults.taskManager.slots }}"
