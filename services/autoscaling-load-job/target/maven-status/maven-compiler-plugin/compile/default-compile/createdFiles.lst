@@ -1,5 +1,0 @@
-com/example/flink/AutoscalingLoadJob$CountingWindowFunction.class
-com/example/flink/AutoscalingLoadJob$CpuHeavyMap.class
-com/example/flink/AutoscalingLoadJob.class
-com/example/flink/AutoscalingLoadJob$LoadEvent.class
-com/example/flink/AutoscalingLoadJob$SyntheticLoadSource.class
