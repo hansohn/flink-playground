@@ -5,12 +5,8 @@ import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.functions.RichMapFunction;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
-import org.apache.flink.api.common.typeinfo.TypeInformation;
-import org.apache.flink.api.connector.source.util.ratelimit.RateLimiterStrategy;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.connector.datagen.source.DataGeneratorSource;
-import org.apache.flink.connector.datagen.source.GeneratorFunction;
 import org.apache.flink.streaming.api.CheckpointingMode;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
@@ -51,26 +47,32 @@ public class AutoscalingLoadJob {
 
         // 1) Synthetic load source using new Source API (FLIP-27)
         // This properly exposes busyTimeMsPerSecond metric for autoscaling
-        DataGeneratorSource<LoadEvent> generatorSource = new DataGeneratorSource<>(
-                new LoadEventGeneratorFunction(numKeys),
-                Long.MAX_VALUE, // Unbounded source
-                RateLimiterStrategy.perSecond(eventsPerSecondPerParallelSubtask),
-                TypeInformation.of(LoadEvent.class)
-        );
+        // Using NumberSequenceSource for truly unbounded generation
+        org.apache.flink.api.connector.source.lib.NumberSequenceSource numberSource =
+                new org.apache.flink.api.connector.source.lib.NumberSequenceSource(0, Long.MAX_VALUE);
 
         SingleOutputStreamOperator<LoadEvent> source =
-                env.fromSource(generatorSource, WatermarkStrategy.noWatermarks(), "synthetic-load-source")
-                   .uid("synthetic-load-source");
+                env.fromSource(numberSource, WatermarkStrategy.noWatermarks(), "number-source")
+                   .uid("synthetic-load-source")
+                   .map(new RichMapFunction<Long, LoadEvent>() {
+                       private transient Random random;
 
-        // 2) CPU-heavy map
-        SingleOutputStreamOperator<LoadEvent> heavyMapped =
-                source.map(new CpuHeavyMap(cpuWorkIterations))
-                      .name("cpu-heavy-map")
-                      .uid("cpu-heavy-map");
+                       @Override
+                       public LoadEvent map(Long index) throws Exception {
+                           if (random == null) {
+                               random = new Random();
+                           }
+                           String key = "key-" + (index % numKeys);
+                           return new LoadEvent(key, System.currentTimeMillis(), random.nextDouble());
+                       }
+                   })
+                   .name("load-event-generator")
+                   .map(new CpuHeavyMap(cpuWorkIterations))
+                   .name("cpu-heavy-map")
+                   .uid("cpu-heavy-map");
 
         // 3) Keyed tumbling window with simple stateful aggregation
-        heavyMapped
-                .keyBy(e -> e.key)
+        source.keyBy(e -> e.key)
                 .window(TumblingProcessingTimeWindows.of(Time.seconds(windowSeconds)))
                 .process(new CountingWindowFunction())
                 .name("keyed-window-agg")
@@ -118,35 +120,6 @@ public class AutoscalingLoadJob {
             this.key = key;
             this.timestamp = timestamp;
             this.payload = payload;
-        }
-    }
-
-    /**
-     * Generator function for creating synthetic load events.
-     * Uses new Source API (FLIP-27) which properly exposes metrics for autoscaling.
-     */
-    public static class LoadEventGeneratorFunction implements GeneratorFunction<Long, LoadEvent> {
-
-        private final int numKeys;
-        private transient Random random;
-
-        public LoadEventGeneratorFunction(int numKeys) {
-            this.numKeys = numKeys;
-        }
-
-        @Override
-        public LoadEvent map(Long index) throws Exception {
-            if (random == null) {
-                random = new Random();
-            }
-
-            // Generate key based on index for better distribution
-            String key = "key-" + (index % numKeys);
-            return new LoadEvent(
-                    key,
-                    System.currentTimeMillis(),
-                    random.nextDouble()
-            );
         }
     }
 
