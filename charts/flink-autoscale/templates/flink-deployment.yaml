@@ -136,6 +136,9 @@ spec:
     {{- if $job.job.upgradeMode }}
     upgradeMode: {{ $job.job.upgradeMode }}
     {{- end }}
+    {{- if hasKey $job.job "allowNonRestoredState" }}
+    allowNonRestoredState: {{ $job.job.allowNonRestoredState }}
+    {{- end }}
     {{- if $job.job.state }}
     state: {{ $job.job.state }}
     {{- end }}
