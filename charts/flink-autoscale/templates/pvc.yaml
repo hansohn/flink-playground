@@ -17,6 +17,6 @@ spec:
   {{- end }}
   resources:
     requests:
-      storage: {{ default $.Values.defaults.persistence.size $job.persistence.size | default $.Values.defaults.persistence.size }}
+      storage: {{ if and $job.persistence (hasKey $job.persistence "size") }}{{ $job.persistence.size }}{{ else }}{{ $.Values.defaults.persistence.size }}{{ end }}
 {{- end }}
 {{- end }}
