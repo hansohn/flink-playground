@@ -3,16 +3,18 @@ package com.example.flink;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.functions.RichMapFunction;
-import org.apache.flink.api.common.serialization.SimpleStringSchema;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
+import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.apache.flink.api.connector.source.util.ratelimit.RateLimiterStrategy;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.connector.datagen.source.DataGeneratorSource;
+import org.apache.flink.connector.datagen.source.GeneratorFunction;
 import org.apache.flink.streaming.api.CheckpointingMode;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.functions.source.RichParallelSourceFunction;
 import org.apache.flink.streaming.api.functions.windowing.ProcessWindowFunction;
 import org.apache.flink.streaming.api.windowing.assigners.TumblingProcessingTimeWindows;
 import org.apache.flink.streaming.api.windowing.time.Time;
@@ -47,10 +49,17 @@ public class AutoscalingLoadJob {
         env.enableCheckpointing(30_000, CheckpointingMode.EXACTLY_ONCE);
         env.getCheckpointConfig().setMinPauseBetweenCheckpoints(5_000);
 
-        // 1) Synthetic load source
+        // 1) Synthetic load source using new Source API (FLIP-27)
+        // This properly exposes busyTimeMsPerSecond metric for autoscaling
+        DataGeneratorSource<LoadEvent> generatorSource = new DataGeneratorSource<>(
+                new LoadEventGeneratorFunction(numKeys),
+                Long.MAX_VALUE, // Unbounded source
+                RateLimiterStrategy.perSecond(eventsPerSecondPerParallelSubtask),
+                TypeInformation.of(LoadEvent.class)
+        );
+
         SingleOutputStreamOperator<LoadEvent> source =
-                env.addSource(new SyntheticLoadSource(eventsPerSecondPerParallelSubtask, numKeys))
-                   .name("synthetic-load-source")
+                env.fromSource(generatorSource, WatermarkStrategy.noWatermarks(), "synthetic-load-source")
                    .uid("synthetic-load-source");
 
         // 2) CPU-heavy map
@@ -113,52 +122,31 @@ public class AutoscalingLoadJob {
     }
 
     /**
-     * Synthetic parallel source that emits events at a fixed rate per subtask.
+     * Generator function for creating synthetic load events.
+     * Uses new Source API (FLIP-27) which properly exposes metrics for autoscaling.
      */
-    public static class SyntheticLoadSource extends RichParallelSourceFunction<LoadEvent> {
+    public static class LoadEventGeneratorFunction implements GeneratorFunction<Long, LoadEvent> {
 
-        private volatile boolean running = true;
-        private final int eventsPerSecond;
         private final int numKeys;
+        private transient Random random;
 
-        public SyntheticLoadSource(int eventsPerSecond, int numKeys) {
-            this.eventsPerSecond = eventsPerSecond;
+        public LoadEventGeneratorFunction(int numKeys) {
             this.numKeys = numKeys;
         }
 
         @Override
-        public void run(SourceContext<LoadEvent> ctx) throws Exception {
-            Random random = new Random();
-            long emitIntervalNanos = 1_000_000_000L / eventsPerSecond;
-
-            int subtaskIndex = getRuntimeContext().getIndexOfThisSubtask();
-            String keyPrefix = "key-" + subtaskIndex + "-";
-
-            long lastEmitTime = System.nanoTime();
-
-            while (running) {
-                long now = System.nanoTime();
-                if (now - lastEmitTime >= emitIntervalNanos) {
-                    String key = keyPrefix + (random.nextInt(numKeys));
-                    LoadEvent event = new LoadEvent(
-                            key,
-                            System.currentTimeMillis(),
-                            random.nextDouble()
-                    );
-                    synchronized (ctx.getCheckpointLock()) {
-                        ctx.collect(event);
-                    }
-                    lastEmitTime = now;
-                } else {
-                    // Small sleep to avoid busy spin
-                    Thread.sleep(0, 200_000); // 0.2 ms
-                }
+        public LoadEvent map(Long index) throws Exception {
+            if (random == null) {
+                random = new Random();
             }
-        }
 
-        @Override
-        public void cancel() {
-            running = false;
+            // Generate key based on index for better distribution
+            String key = "key-" + (index % numKeys);
+            return new LoadEvent(
+                    key,
+                    System.currentTimeMillis(),
+                    random.nextDouble()
+            );
         }
     }
 

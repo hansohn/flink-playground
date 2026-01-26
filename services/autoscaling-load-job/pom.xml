@@ -35,6 +35,13 @@
             <version>${flink.version}</version>
             <scope>provided</scope>
         </dependency>
+
+        <!-- DataGen connector for synthetic data generation (new Source API) -->
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-connector-datagen</artifactId>
+            <version>${flink.version}</version>
+        </dependency>
     </dependencies>
 
     <build>
@@ -66,7 +73,8 @@
                             <artifactSet>
                                 <excludes>
                                     <!-- Exclude Flink dependencies (provided by runtime) -->
-                                    <exclude>org.apache.flink:*</exclude>
+                                    <exclude>org.apache.flink:flink-streaming-java</exclude>
+                                    <exclude>org.apache.flink:flink-clients</exclude>
                                     <exclude>org.slf4j:*</exclude>
                                     <exclude>log4j:*</exclude>
                                 </excludes>
