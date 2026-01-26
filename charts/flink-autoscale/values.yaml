@@ -72,7 +72,8 @@ jobs:
       jarURI: "local:///opt/flink/usrlib/autoscaling-load-job.jar"
       entryClass: "com.example.flink.AutoscalingLoadJob"
       parallelism: 2
-      upgradeMode: stateless
+      # Use last-state to preserve autoscaler decisions across image updates
+      upgradeMode: last-state
       state: running
       args: []
 
@@ -113,8 +114,11 @@ jobs:
       maxParallelism: 10
 
     # Additional Flink configuration
-    # Note: Using in-memory state backend for playground simplicity
-    # Use persistent volumes with RocksDB state backend for production
+    # Note: Using in-memory state backend and local filesystem for playground simplicity
+    # For production:
+    # - Use RocksDB state backend for large state
+    # - Use persistent storage (S3, HDFS, etc.) for checkpoints/savepoints
+    # - This preserves autoscaler decisions across image updates
     flinkConfiguration:
       state.backend.type: hashmap
       state.checkpoints.dir: file:///tmp/flink-checkpoints
