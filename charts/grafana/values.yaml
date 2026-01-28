@@ -36,25 +36,17 @@ grafana:
           isDefault: true
           editable: true
 
-  # Dashboard providers
-  dashboardProviders:
-    dashboardproviders.yaml:
-      apiVersion: 1
-      providers:
-        - name: 'flink'
-          orgId: 1
-          folder: 'Flink'
-          type: file
-          disableDeletion: false
-          editable: true
-          options:
-            path: /var/lib/grafana/dashboards/flink
-
-  # Import dashboards
-  dashboards:
-    flink:
-      flink-memory-monitoring:
-        file: dashboards/flink-memory-monitoring.json
+  # Enable sidecar for dashboard discovery
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      folder: /tmp/dashboards
+      defaultFolderName: Flink
+      searchNamespace: ALL
+      provider:
+        foldersFromFilesStructure: true
 
   # Grafana ini configuration
   grafana.ini:
