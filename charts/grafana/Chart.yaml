@@ -1,0 +1,11 @@
+apiVersion: v2
+name: grafana
+description: Grafana for visualizing Flink and Kubernetes metrics
+type: application
+version: 0.1.0
+appVersion: "10.2.3"
+
+dependencies:
+  - name: grafana
+    version: "7.2.0"
+    repository: https://grafana.github.io/helm-charts

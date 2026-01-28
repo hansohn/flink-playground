@@ -1,0 +1,68 @@
+# Grafana configuration for Flink monitoring
+# Wraps the official Grafana Helm chart with pre-configured dashboards and data sources
+
+grafana:
+  # Admin credentials
+  adminUser: admin
+  adminPassword: admin  # Change in production
+
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 80
+
+  # Resources
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  # Persistence (disabled for POC)
+  persistence:
+    enabled: false
+
+  # Data sources
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+        - name: Prometheus
+          type: prometheus
+          url: http://prometheus-prometheus.monitoring.svc.cluster.local:9090
+          access: proxy
+          isDefault: true
+          editable: true
+
+  # Dashboard providers
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: 'flink'
+          orgId: 1
+          folder: 'Flink'
+          type: file
+          disableDeletion: false
+          editable: true
+          options:
+            path: /var/lib/grafana/dashboards/flink
+
+  # Import dashboards
+  dashboards:
+    flink:
+      flink-memory-monitoring:
+        file: dashboards/flink-memory-monitoring.json
+
+  # Grafana ini configuration
+  grafana.ini:
+    server:
+      root_url: "%(protocol)s://%(domain)s:%(http_port)s/"
+    analytics:
+      check_for_updates: false
+    log:
+      mode: console
+    grafana_net:
+      url: https://grafana.net

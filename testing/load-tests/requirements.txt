@@ -1,0 +1,14 @@
+# Python dependencies for Flink load testing and analysis
+
+# Prometheus client for querying metrics
+prometheus-api-client==0.5.3
+
+# Data analysis and manipulation
+pandas==2.1.4
+numpy==1.26.2
+
+# Visualization
+matplotlib==3.8.2
+
+# HTTP requests
+requests==2.31.0

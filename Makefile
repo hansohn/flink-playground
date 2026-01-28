@@ -49,6 +49,7 @@ validate/charts:
 	@echo "[INFO] Linting Helm charts..."
 	@helm lint ./charts/metrics-server || true
 	@helm lint ./charts/prometheus || true
+	@helm lint ./charts/grafana || true
 	@helm lint ./charts/vertical-pod-autoscaler || true
 	@helm lint ./charts/flink-autoscale || true
 	@helm lint ./charts/minio || true
@@ -383,6 +384,50 @@ logs/flink: kind/check
 	@$(KUBECTL) logs -n $(FLINK_NAMESPACE) \
 		-l app.kubernetes.io/name=flink-autoscale --tail=100 -f
 .PHONY: logs/flink
+
+# -----------------------------
+# Load Testing
+# -----------------------------
+
+## Run memory load test (requires running cluster)
+loadtest/memory: kind/check
+	@echo "[INFO] Running memory load test..."
+	@cd testing/load-tests && ./memory-load-test.sh
+.PHONY: loadtest/memory
+
+## Run memory load test with custom duration and parallelism
+loadtest/memory/custom: kind/check
+	@echo "[INFO] Running custom memory load test..."
+	@echo "[INFO] Usage: make loadtest/memory/custom DURATION=600 PARALLELISM=20"
+	@cd testing/load-tests && ./memory-load-test.sh \
+		--duration $(or $(DURATION),300) \
+		--parallelism $(or $(PARALLELISM),10) \
+		--namespace $(FLINK_NAMESPACE) \
+		--job $(FLINK_RELEASE)-autoscaling-load
+.PHONY: loadtest/memory/custom
+
+## Analyze load test results from Prometheus
+loadtest/analyze: kind/check
+	@echo "[INFO] Analyzing load test metrics from Prometheus..."
+	@echo "[INFO] Make sure Prometheus is port-forwarded: make prometheus/ui"
+	@cd testing/load-tests && python3 analyze-metrics.py \
+		--prometheus-url http://localhost:9090 \
+		--duration $(or $(DURATION),300)
+.PHONY: loadtest/analyze
+
+## Install Python dependencies for load testing
+loadtest/install-deps:
+	@echo "[INFO] Installing Python dependencies for load testing..."
+	@pip3 install -r testing/load-tests/requirements.txt
+.PHONY: loadtest/install-deps
+
+## Port forward Grafana UI (http://localhost:3000)
+grafana/ui: kind/check
+	@echo "[INFO] Port forwarding to Grafana UI at http://localhost:3000"
+	@echo "[INFO] Default credentials: admin / admin"
+	@echo "[INFO] Press Ctrl+C to stop"
+	@$(KUBECTL) port-forward -n monitoring svc/grafana 3000:80
+.PHONY: grafana/ui
 
 # -----------------------------
 # Cleanup Helpers
