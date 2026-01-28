@@ -151,6 +151,14 @@ spec:
     {{- if and $job.autoscaler (hasKey $job.autoscaler "scaleDownGracePeriod") }}
     {{- $scaleDownGracePeriod = $job.autoscaler.scaleDownGracePeriod }}
     {{- end }}
+    {{- $minParallelism := $.Values.defaults.autoscaler.minParallelism }}
+    {{- if and $job.autoscaler (hasKey $job.autoscaler "minParallelism") }}
+    {{- $minParallelism = $job.autoscaler.minParallelism }}
+    {{- end }}
+    {{- $maxParallelism := $.Values.defaults.autoscaler.maxParallelism }}
+    {{- if and $job.autoscaler (hasKey $job.autoscaler "maxParallelism") }}
+    {{- $maxParallelism = $job.autoscaler.maxParallelism }}
+    {{- end }}
     kubernetes.operator.job.autoscaler.enabled: "true"
     kubernetes.operator.job.autoscaler.stabilization.interval: {{ $stabilizationInterval | quote }}
     kubernetes.operator.job.autoscaler.metrics.window: {{ $metricsWindow | quote }}
@@ -158,6 +166,8 @@ spec:
     kubernetes.operator.job.autoscaler.target.utilization.boundary: {{ $targetUtilizationBoundary | quote }}
     kubernetes.operator.job.autoscaler.scale-up.grace-period: {{ $scaleUpGracePeriod | quote }}
     kubernetes.operator.job.autoscaler.scale-down.grace-period: {{ $scaleDownGracePeriod | quote }}
+    kubernetes.operator.job.autoscaler.parallelism.min: {{ $minParallelism | quote }}
+    kubernetes.operator.job.autoscaler.parallelism.max: {{ $maxParallelism | quote }}
     {{- end }}
 
   {{- if $job.job }}
