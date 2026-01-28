@@ -31,6 +31,18 @@ spec:
       spec:
         containers:
           - name: flink-main-container
+            env:
+              # S3 credentials from Kubernetes Secret (used by Flink S3 filesystem)
+              - name: AWS_ACCESS_KEY_ID
+                valueFrom:
+                  secretKeyRef:
+                    name: {{ include "flink-autoscale.fullname" $ }}-{{ $job.name }}-s3-credentials
+                    key: s3.access-key
+              - name: AWS_SECRET_ACCESS_KEY
+                valueFrom:
+                  secretKeyRef:
+                    name: {{ include "flink-autoscale.fullname" $ }}-{{ $job.name }}-s3-credentials
+                    key: s3.secret-key
             resources:
               requests:
                 cpu: {{ default $.Values.defaults.jobManager.resources.requests.cpu $job.jobManager.resources.requests.cpu | default $.Values.defaults.jobManager.resources.requests.cpu | quote }}
@@ -64,6 +76,18 @@ spec:
       spec:
         containers:
           - name: flink-main-container
+            env:
+              # S3 credentials from Kubernetes Secret (used by Flink S3 filesystem)
+              - name: AWS_ACCESS_KEY_ID
+                valueFrom:
+                  secretKeyRef:
+                    name: {{ include "flink-autoscale.fullname" $ }}-{{ $job.name }}-s3-credentials
+                    key: s3.access-key
+              - name: AWS_SECRET_ACCESS_KEY
+                valueFrom:
+                  secretKeyRef:
+                    name: {{ include "flink-autoscale.fullname" $ }}-{{ $job.name }}-s3-credentials
+                    key: s3.secret-key
             resources:
               requests:
                 cpu: {{ default $.Values.defaults.taskManager.resources.requests.cpu $job.taskManager.resources.requests.cpu | default $.Values.defaults.taskManager.resources.requests.cpu | quote }}

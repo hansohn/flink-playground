@@ -21,7 +21,7 @@ Key configuration values (see `values.yaml`):
 ```yaml
 minio:
   mode: standalone         # Single instance for POC
-  rootUser: admin         # Default credentials
+  rootUser: admin         # Default credentials (stored in Kubernetes Secret)
   rootPassword: password123
 
   persistence:
@@ -29,7 +29,16 @@ minio:
 
   buckets:
     - name: flink-state   # Pre-created for Flink
+
+  # Credentials are stored in Kubernetes Secret (see templates/secret.yaml)
+  existingSecret: minio-credentials
 ```
+
+**Security Note**: Credentials are stored in a Kubernetes Secret (`minio-credentials`) created by this chart. For production deployments, consider using external secret management solutions like:
+- AWS Secrets Manager with [External Secrets Operator](https://external-secrets.io/)
+- HashiCorp Vault
+- Azure Key Vault
+- Google Secret Manager
 
 ## Deployment
 
@@ -43,25 +52,38 @@ The MinIO endpoint is automatically available at:
 
 Flink configuration (in `flink-autoscale` values):
 ```yaml
+# S3 credentials stored in Kubernetes Secret and injected as environment variables
+s3:
+  accessKey: admin
+  secretKey: password123
+
 flinkConfiguration:
   state.checkpoints.dir: s3://flink-state/checkpoints/autoscaling-load
   state.savepoints.dir: s3://flink-state/savepoints/autoscaling-load
   s3.endpoint: http://minio.storage.svc.cluster.local:9000
   s3.path.style.access: "true"
-  s3.access-key: admin
-  s3.secret-key: password123
   s3.connection.ssl.enabled: "false"
+  # S3 credentials injected via AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY env vars
 ```
 
 **Note**: By default, Kubernetes allows cross-namespace service access via DNS. No additional RBAC or NetworkPolicies are required for Flink pods to access MinIO service in the `storage` namespace.
 
 ## Accessing MinIO
 
+### Retrieving Credentials
+```bash
+# Get the root username
+kubectl get secret minio-credentials -n storage -o jsonpath='{.data.rootUser}' | base64 -d && echo
+
+# Get the root password
+kubectl get secret minio-credentials -n storage -o jsonpath='{.data.rootPassword}' | base64 -d && echo
+```
+
 ### Web UI
 ```bash
 kubectl port-forward -n storage svc/minio-console 9001:9001
 # Open http://localhost:9001
-# Login: admin / password123
+# Login: admin / password123 (default credentials from values.yaml)
 ```
 
 ### MinIO Client (mc)

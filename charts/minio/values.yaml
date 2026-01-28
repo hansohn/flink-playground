@@ -8,8 +8,14 @@ minio:
   replicas: 1
 
   # Root credentials
+  # These values are used to create the secret in templates/secret.yaml
+  # The secret is then referenced via existingSecret below
   rootUser: admin
   rootPassword: password123
+
+  # Use secret created by this chart (see templates/secret.yaml)
+  # The upstream MinIO chart will read credentials from this secret
+  existingSecret: minio-credentials
 
   # Persistence
   persistence:

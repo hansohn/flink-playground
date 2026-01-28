@@ -62,6 +62,14 @@ defaults:
     minParallelism: 1
     maxParallelism: 10
 
+  # S3 Credentials (stored in Kubernetes Secret)
+  # These credentials are injected as environment variables (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)
+  # and used by Flink's S3 filesystem plugin
+  # NOTE: Change these values or override per-job for production deployments
+  s3:
+    accessKey: admin
+    secretKey: password123
+
 # Define multiple Flink jobs
 # Each job creates a separate FlinkDeployment (cluster + job)
 jobs:
@@ -74,6 +82,12 @@ jobs:
       repository: flink-autoscaling-load
       tag: "1.0.1"
       pullPolicy: IfNotPresent
+
+    # S3 Credentials (inherits from defaults if not specified)
+    # Stored in Kubernetes Secret and injected as environment variables
+    s3:
+      accessKey: admin
+      secretKey: password123
 
     # Job specification (Application Mode)
     job:
@@ -130,18 +144,18 @@ jobs:
     # Using RocksDB state backend with MinIO (S3-compatible) for state durability
     # MinIO runs in 'storage' namespace, provides production-like object storage for POC
     # State persists across pod deletions, scaling events, and image updates
-    # For production: Change endpoint to AWS S3, update credentials, disable path-style access
+    # For production: Change endpoint to AWS S3, update credentials via s3 section above
     flinkConfiguration:
       state.backend.type: rocksdb
       state.backend.incremental: "true"
       # MinIO S3-compatible storage (cross-namespace access)
       state.checkpoints.dir: s3://flink-state/checkpoints/autoscaling-load
       state.savepoints.dir: s3://flink-state/savepoints/autoscaling-load
-      # MinIO endpoint and credentials (storage namespace)
+      # MinIO endpoint configuration (storage namespace)
+      # NOTE: S3 credentials are injected as environment variables from Kubernetes Secret
+      # (AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY)
       s3.endpoint: http://minio.storage.svc.cluster.local:9000
       s3.path.style.access: "true"
-      s3.access-key: admin
-      s3.secret-key: password123
       s3.connection.ssl.enabled: "false"
       execution.checkpointing.interval: "30s"
       # Retain checkpoints when job is cancelled (for last-state/savepoint modes)
