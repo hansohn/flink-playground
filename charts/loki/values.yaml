@@ -39,6 +39,12 @@ loki:
         memory: 512Mi
     persistence:
       enabled: false
+    extraVolumes:
+      - name: data
+        emptyDir: {}
+    extraVolumeMounts:
+      - name: data
+        mountPath: /var/loki
 
   # Disable all non-SingleBinary components
   backend:
