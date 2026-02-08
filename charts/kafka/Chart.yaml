@@ -3,9 +3,9 @@ name: kafka
 description: Strimzi Kafka cluster for Flink streaming playground
 type: application
 version: 0.1.0
-appVersion: "0.44.0"
+appVersion: "0.50.0"
 
 dependencies:
   - name: strimzi-kafka-operator
-    version: "0.44.0"
+    version: "0.50.0"
     repository: https://strimzi.io/charts/

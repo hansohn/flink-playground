@@ -2,24 +2,17 @@ apiVersion: kafka.strimzi.io/v1beta2
 kind: Kafka
 metadata:
   name: {{ .Values.kafka.name }}
+  annotations:
+    strimzi.io/node-pools: enabled
+    strimzi.io/kraft: enabled
 spec:
   kafka:
     version: {{ .Values.kafka.version }}
-    replicas: {{ .Values.kafka.replicas }}
+    metadataVersion: {{ .Values.kafka.metadataVersion }}
     listeners:
       {{- toYaml .Values.kafka.listeners | nindent 6 }}
     config:
       {{- toYaml .Values.kafka.config | nindent 6 }}
-    storage:
-      type: {{ .Values.kafka.storage.type }}
-    resources:
-      {{- toYaml .Values.kafka.resources | nindent 6 }}
-  zookeeper:
-    replicas: {{ .Values.zookeeper.replicas }}
-    storage:
-      type: {{ .Values.zookeeper.storage.type }}
-    resources:
-      {{- toYaml .Values.zookeeper.resources | nindent 6 }}
   entityOperator:
     topicOperator:
       resources:

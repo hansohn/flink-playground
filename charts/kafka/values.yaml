@@ -12,7 +12,8 @@ strimzi-kafka-operator:
 kafka:
   name: autoscaling-load
   replicas: 1
-  version: "3.8.0"
+  version: "3.9.0"
+  metadataVersion: "3.9"
   listeners:
     - name: plain
       port: 9092
@@ -33,19 +34,6 @@ kafka:
     transaction.state.log.min.isr: 1
     default.replication.factor: 1
     min.insync.replicas: 1
-
-# ZooKeeper configuration
-zookeeper:
-  replicas: 1
-  resources:
-    requests:
-      cpu: 100m
-      memory: 256Mi
-    limits:
-      cpu: 500m
-      memory: 512Mi
-  storage:
-    type: ephemeral
 
 # Entity Operator (Topic + User Operators)
 entityOperator:
