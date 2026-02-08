@@ -80,7 +80,7 @@ jobs:
     # Use custom image with JAR bundled (includes S3 plugin for MinIO)
     image:
       repository: hansohn/flink-autoscaling-load
-      tag: "1.0.1"
+      tag: "1.1.0"
       pullPolicy: IfNotPresent
 
     # S3 Credentials (inherits from defaults if not specified)
@@ -102,7 +102,15 @@ jobs:
       # Allow job to start even if savepoint is incomplete
       allowNonRestoredState: true
       state: running
-      args: []
+      args:
+        - "--source-type"
+        - "kafka"
+        - "--kafka-bootstrap-servers"
+        - "autoscaling-load-kafka-bootstrap.kafka.svc.cluster.local:9092"
+        - "--kafka-topic"
+        - "load-events"
+        - "--cpu-iterations"
+        - "0"
 
     # Override resources if needed
     jobManager:

@@ -1,0 +1,20 @@
+image:
+  repository: hansohn/kafka-load-producer
+  tag: "1.0.0"
+  pullPolicy: IfNotPresent
+
+replicas: 1
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 250m
+    memory: 256Mi
+
+producer:
+  bootstrapServers: "autoscaling-load-kafka-bootstrap.kafka.svc.cluster.local:9092"
+  topic: "load-events"
+  recordsPerSecond: 1000
+  keys: 128
