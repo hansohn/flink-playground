@@ -13,6 +13,9 @@ WORKDIR /opt/flink
 RUN mkdir -p /opt/flink/plugins/s3-fs-hadoop && \
     cp /opt/flink/opt/flink-s3-fs-hadoop-*.jar /opt/flink/plugins/s3-fs-hadoop/
 
+# Download OpenTelemetry Java agent for automatic tracing instrumentation
+ADD https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/latest/download/opentelemetry-javaagent.jar /opt/flink/lib/opentelemetry-javaagent.jar
+
 # Copy the job JAR to the usrlib directory
 # This directory is automatically added to Flink's classpath
 COPY target/autoscaling-load-job.jar /opt/flink/usrlib/autoscaling-load-job.jar

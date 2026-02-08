@@ -163,6 +163,16 @@ jobs:
       # Prometheus metrics reporter
       metrics.reporter.prom.factory.class: org.apache.flink.metrics.prometheus.PrometheusReporterFactory
       metrics.reporter.prom.port: "9249"
+      # OpenTelemetry tracing via Java agent
+      env.java.opts.all: "-javaagent:/opt/flink/lib/opentelemetry-javaagent.jar"
+      containerized.master.env.OTEL_SERVICE_NAME: flink-autoscaling-load
+      containerized.master.env.OTEL_TRACES_EXPORTER: otlp
+      containerized.master.env.OTEL_EXPORTER_OTLP_ENDPOINT: "http://tempo.monitoring.svc.cluster.local:4317"
+      containerized.master.env.OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      containerized.taskmanager.env.OTEL_SERVICE_NAME: flink-autoscaling-load
+      containerized.taskmanager.env.OTEL_TRACES_EXPORTER: otlp
+      containerized.taskmanager.env.OTEL_EXPORTER_OTLP_ENDPOINT: "http://tempo.monitoring.svc.cluster.local:4317"
+      containerized.taskmanager.env.OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       # Flink Autotuning - automatic memory optimization
       kubernetes.operator.job.autoscaler.memory.tuning.enabled: "true"
       kubernetes.operator.job.autoscaler.memory.tuning.overhead: "0.2"
