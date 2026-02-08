@@ -35,6 +35,34 @@ grafana:
           access: proxy
           isDefault: true
           editable: true
+        - name: Loki
+          type: loki
+          url: http://loki-gateway.monitoring.svc.cluster.local
+          access: proxy
+          editable: true
+          jsonData:
+            derivedFields:
+              - name: TraceID
+                datasourceUid: tempo
+                matcherRegex: "traceID=(\\w+)"
+                url: "$${__value.raw}"
+        - name: Tempo
+          type: tempo
+          uid: tempo
+          url: http://tempo.monitoring.svc.cluster.local:3100
+          access: proxy
+          editable: true
+          jsonData:
+            tracesToLogs:
+              datasourceUid: loki
+              filterByTraceID: true
+              filterBySpanID: false
+              mapTagNamesEnabled: true
+              mappedTags:
+                - key: service.name
+                  value: service
+              lokiSearch:
+                datasourceUid: loki
 
   # Enable sidecar for dashboard discovery
   sidecar:

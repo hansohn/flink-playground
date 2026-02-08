@@ -1,0 +1,79 @@
+# Loki configuration for log aggregation
+# Wraps the official Grafana Loki Helm chart in single-binary mode
+
+loki:
+  # Single-binary deployment mode (POC-appropriate)
+  deploymentMode: SingleBinary
+
+  loki:
+    # Disable authentication for local development
+    auth_enabled: false
+
+    # Common storage config - filesystem only
+    commonConfig:
+      replication_factor: 1
+
+    storage:
+      type: filesystem
+
+    # Schema config
+    schemaConfig:
+      configs:
+        - from: "2024-01-01"
+          store: tsdb
+          object_store: filesystem
+          schema: v13
+          index:
+            prefix: index_
+            period: 24h
+
+  # Single-binary deployment
+  singleBinary:
+    replicas: 1
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    persistence:
+      enabled: false
+
+  # Disable all non-SingleBinary components
+  backend:
+    replicas: 0
+  read:
+    replicas: 0
+  write:
+    replicas: 0
+
+  # Gateway for standard API endpoint
+  gateway:
+    enabled: true
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 128Mi
+
+  # Disable optional components
+  minio:
+    enabled: false
+  lokiCanary:
+    enabled: false
+  test:
+    enabled: false
+  monitoring:
+    selfMonitoring:
+      enabled: false
+      grafanaAgent:
+        installOperator: false
+
+  # Chunk caching
+  chunksCache:
+    enabled: false
+  resultsCache:
+    enabled: false

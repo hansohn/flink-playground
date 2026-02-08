@@ -1,0 +1,108 @@
+# Alloy configuration for unified telemetry collection
+# Wraps the official Grafana Alloy Helm chart as a DaemonSet
+
+alloy:
+  # DaemonSet deployment (collects from all nodes)
+  controller:
+    type: daemonset
+
+  # Resources
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+  # Alloy configuration
+  alloy:
+    configMap:
+      content: |
+        // ============================================================
+        // Log Pipeline: Discover pods -> Collect logs -> Ship to Loki
+        // ============================================================
+
+        // Discover all pods for log collection
+        discovery.kubernetes "pods" {
+          role = "pod"
+        }
+
+        // Relabel discovered pods
+        discovery.relabel "pods" {
+          targets = discovery.kubernetes.pods.targets
+
+          // Set the __path__ label to the pod log path
+          rule {
+            source_labels = ["__meta_kubernetes_pod_uid", "__meta_kubernetes_pod_container_name"]
+            separator     = "/"
+            target_label  = "__path__"
+            replacement   = "/var/log/pods/*$1/$2/*.log"
+          }
+
+          // Keep useful labels
+          rule {
+            source_labels = ["__meta_kubernetes_namespace"]
+            target_label  = "namespace"
+          }
+          rule {
+            source_labels = ["__meta_kubernetes_pod_name"]
+            target_label  = "pod"
+          }
+          rule {
+            source_labels = ["__meta_kubernetes_pod_container_name"]
+            target_label  = "container"
+          }
+          rule {
+            source_labels = ["__meta_kubernetes_pod_node_name"]
+            target_label  = "node"
+          }
+        }
+
+        // Collect logs from discovered pods
+        loki.source.kubernetes "pods" {
+          targets    = discovery.relabel.pods.output
+          forward_to = [loki.write.default.receiver]
+        }
+
+        // Ship logs to Loki gateway
+        loki.write "default" {
+          endpoint {
+            url = "http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push"
+          }
+        }
+
+        // ============================================================
+        // Trace Pipeline: OTLP receiver -> Batch -> Export to Tempo
+        // ============================================================
+
+        // Receive traces via OTLP
+        otelcol.receiver.otlp "default" {
+          grpc {
+            endpoint = "0.0.0.0:4317"
+          }
+          http {
+            endpoint = "0.0.0.0:4318"
+          }
+
+          output {
+            traces = [otelcol.processor.batch.default.input]
+          }
+        }
+
+        // Batch processor for efficiency
+        otelcol.processor.batch "default" {
+          output {
+            traces = [otelcol.exporter.otlp.tempo.input]
+          }
+        }
+
+        // Export traces to Tempo
+        otelcol.exporter.otlp "tempo" {
+          client {
+            endpoint = "tempo.monitoring.svc.cluster.local:4317"
+            tls {
+              insecure = true
+            }
+          }
+        }

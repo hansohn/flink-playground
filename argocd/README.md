@@ -8,6 +8,10 @@ The setup uses ArgoCD's "App of Apps" pattern to manage all components:
 
 - **metrics-server**: Kubernetes metrics server for resource metrics
 - **prometheus**: Monitoring and metrics collection
+- **grafana**: Dashboards and visualization
+- **loki**: Log aggregation
+- **tempo**: Distributed tracing
+- **alloy**: Unified telemetry collection (logs and traces)
 - **vertical-pod-autoscaler**: VPA for automatic resource recommendations
 - **cert-manager**: Certificate management (required by Flink Operator)
 - **flink-kubernetes-operator**: Apache Flink Kubernetes Operator
@@ -22,6 +26,10 @@ argocd/
 └── apps/                        # Individual application manifests
     ├── metrics-server.yaml
     ├── prometheus.yaml
+    ├── grafana.yaml
+    ├── loki.yaml
+    ├── tempo.yaml
+    ├── alloy.yaml
     ├── vpa.yaml
     ├── cert-manager.yaml
     ├── flink-operator.yaml
@@ -74,8 +82,8 @@ This will:
 # Get the admin password
 make argocd/password
 
-# Port forward to ArgoCD UI
-make argocd/ui
+# Port forward all UIs
+make ui
 
 # Visit http://localhost:8080
 # Username: admin
@@ -87,19 +95,17 @@ make argocd/ui
 ### ArgoCD Management
 
 - `make argocd/install` - Install ArgoCD
-- `make argocd/uninstall` - Uninstall ArgoCD
-- `make argocd/deploy-apps` - Deploy all applications
+- `make argocd/clean` - Uninstall ArgoCD
+- `make argocd/deploy` - Deploy all applications
 - `make argocd/status` - Show ArgoCD application status
-- `make argocd/ui` - Port forward to ArgoCD UI
 - `make argocd/password` - Get ArgoCD admin password
+- `make ui` - Port forward all UIs
 
 ### Environment Management
 
 - `make up` - Bootstrap entire environment with ArgoCD (recommended)
 - `make up-legacy` - Bootstrap without ArgoCD (legacy direct install)
-- `make down` - Tear down entire environment
-- `make status` - Show cluster status
-
+- `make kind/down` - Delete Kind cluster
 ## How It Works
 
 ### App of Apps Pattern
@@ -174,13 +180,11 @@ All components are now exclusively managed through ArgoCD:
 make up
 
 # Tear down the entire environment
-make down
+make kind/down
 
 # Check ArgoCD application status
 make argocd/status
 
-# Check overall cluster status
-make status
 ```
 
 ## Next Steps
