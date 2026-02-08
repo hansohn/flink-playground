@@ -14,7 +14,7 @@ resources:
     memory: 256Mi
 
 producer:
-  bootstrapServers: "autoscaling-load-kafka-bootstrap.kafka.svc.cluster.local:9092"
+  bootstrapServers: "kafka-kafka-bootstrap.kafka.svc.cluster.local:9092"
   topic: "load-events"
   recordsPerSecond: 1000
   keys: 128

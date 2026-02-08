@@ -10,7 +10,7 @@ strimzi-kafka-operator:
 
 # Kafka cluster configuration (used by templates)
 kafka:
-  name: autoscaling-load
+  name: kafka
   replicas: 1
   version: "4.0.0"
   metadataVersion: "4.0"
