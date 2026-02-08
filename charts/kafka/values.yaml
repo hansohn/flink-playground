@@ -12,8 +12,8 @@ strimzi-kafka-operator:
 kafka:
   name: autoscaling-load
   replicas: 1
-  version: "3.9.0"
-  metadataVersion: "3.9"
+  version: "4.0.0"
+  metadataVersion: "4.0"
   listeners:
     - name: plain
       port: 9092
