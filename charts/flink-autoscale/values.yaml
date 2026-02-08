@@ -79,7 +79,7 @@ jobs:
 
     # Use custom image with JAR bundled (includes S3 plugin for MinIO)
     image:
-      repository: flink-autoscaling-load
+      repository: hansohn/flink-autoscaling-load
       tag: "1.0.1"
       pullPolicy: IfNotPresent
 
