@@ -8,7 +8,7 @@ metadata:
 spec:
   kafka:
     version: {{ .Values.kafka.version }}
-    metadataVersion: {{ .Values.kafka.metadataVersion }}
+    metadataVersion: {{ .Values.kafka.metadataVersion | quote }}
     listeners:
       {{- toYaml .Values.kafka.listeners | nindent 6 }}
     config:
