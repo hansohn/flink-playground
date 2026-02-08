@@ -25,7 +25,7 @@ playground-sized Kafka cluster and a `load-events` topic for the Flink autoscali
 From within the cluster:
 
 ```
-kafka-kafka-bootstrap.<namespace>.svc.cluster.local:9092
+kafka-local-kafka-bootstrap.<namespace>.svc.cluster.local:9092
 ```
 
 ## Usage

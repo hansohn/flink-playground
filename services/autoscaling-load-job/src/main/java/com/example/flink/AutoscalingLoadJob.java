@@ -41,7 +41,7 @@ public class AutoscalingLoadJob {
 
         // Kafka-specific params
         String kafkaBootstrapServers = getStringArg(args, "--kafka-bootstrap-servers",
-                "kafka-kafka-bootstrap.kafka.svc.cluster.local:9092");
+                "kafka-local-kafka-bootstrap.kafka.svc.cluster.local:9092");
         String kafkaTopic = getStringArg(args, "--kafka-topic", "load-events");
         String kafkaGroupId = getStringArg(args, "--kafka-group-id", "autoscaling-load-consumer");
 

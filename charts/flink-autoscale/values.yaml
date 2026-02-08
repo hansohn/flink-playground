@@ -106,7 +106,7 @@ jobs:
         - "--source-type"
         - "kafka"
         - "--kafka-bootstrap-servers"
-        - "kafka-kafka-bootstrap.kafka.svc.cluster.local:9092"
+        - "kafka-local-kafka-bootstrap.kafka.svc.cluster.local:9092"
         - "--kafka-topic"
         - "load-events"
         - "--cpu-iterations"
