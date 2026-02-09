@@ -347,42 +347,6 @@ ui: kind/check
 .PHONY: ui
 
 # -----------------------------
-# Load Testing
-# -----------------------------
-
-## Run memory load test (requires running cluster)
-loadtest/memory: kind/check
-	@echo "[INFO] Running memory load test..."
-	@cd testing/load-tests && ./memory-load-test.sh
-.PHONY: loadtest/memory
-
-## Run memory load test with custom duration and parallelism
-loadtest/memory/custom: kind/check
-	@echo "[INFO] Running custom memory load test..."
-	@echo "[INFO] Usage: make loadtest/memory/custom DURATION=600 PARALLELISM=20"
-	@cd testing/load-tests && ./memory-load-test.sh \
-		--duration $(or $(DURATION),300) \
-		--parallelism $(or $(PARALLELISM),10) \
-		--namespace $(FLINK_NAMESPACE) \
-		--job $(FLINK_RELEASE)-autoscaling-load
-.PHONY: loadtest/memory/custom
-
-## Analyze load test results from Prometheus
-loadtest/analyze: kind/check
-	@echo "[INFO] Analyzing load test metrics from Prometheus..."
-	@echo "[INFO] Make sure Prometheus is port-forwarded: make ui"
-	@cd testing/load-tests && python3 analyze-metrics.py \
-		--prometheus-url http://localhost:9090 \
-		--duration $(or $(DURATION),300)
-.PHONY: loadtest/analyze
-
-## Install Python dependencies for load testing
-loadtest/install-deps:
-	@echo "[INFO] Installing Python dependencies for load testing..."
-	@pip3 install -r testing/load-tests/requirements.txt
-.PHONY: loadtest/install-deps
-
-# -----------------------------
 # Cleanup Helpers
 # -----------------------------
 
