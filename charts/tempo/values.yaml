@@ -23,16 +23,16 @@ tempo:
           path: /var/tempo/wal
 
     # Reduce memory ballast from default 1024MB
-    memBallastSizeMbs: 128
+    memBallastSizeMbs: 64
 
     # Resources (must be under tempo.tempo to apply to subchart)
     resources:
       requests:
         cpu: 100m
-        memory: 128Mi
+        memory: 256Mi
       limits:
         cpu: 500m
-        memory: 512Mi
+        memory: 768Mi
 
   # Persistence (disabled for POC)
   persistence:
