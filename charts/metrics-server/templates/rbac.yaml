@@ -16,6 +16,12 @@ rules:
   - apiGroups: [""]
     resources: ["nodes", "nodes/stats", "nodes/metrics", "pods"]
     verbs: ["get", "list", "watch"]
+  - apiGroups: ["authorization.k8s.io"]
+    resources: ["subjectaccessreviews"]
+    verbs: ["create"]
+  - apiGroups: ["authentication.k8s.io"]
+    resources: ["tokenreviews"]
+    verbs: ["create"]
 
 ---
 apiVersion: rbac.authorization.k8s.io/v1

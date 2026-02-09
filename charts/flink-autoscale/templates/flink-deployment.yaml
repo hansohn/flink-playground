@@ -1,0 +1,200 @@
+{{- range $job := .Values.jobs }}
+{{- if $job.enabled }}
+---
+apiVersion: flink.apache.org/v1beta1
+kind: FlinkDeployment
+metadata:
+  name: {{ include "flink-autoscale.fullname" $ }}-{{ $job.name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "flink-autoscale.labels" $ | nindent 4 }}
+    flink-job: {{ $job.name }}
+spec:
+  image: "{{ default $.Values.defaults.image.repository $job.image.repository | default $.Values.defaults.image.repository }}:{{ default $.Values.defaults.image.tag $job.image.tag | default $.Values.defaults.image.tag }}"
+  imagePullPolicy: {{ default $.Values.defaults.image.pullPolicy $job.image.pullPolicy | default $.Values.defaults.image.pullPolicy }}
+
+  flinkVersion: v1_18
+
+  serviceAccount: flink
+
+  jobManager:
+    replicas: {{ default $.Values.defaults.jobManager.replicas $job.jobManager.replicas | default $.Values.defaults.jobManager.replicas }}
+    resource:
+      memory: {{ if $job.jobManager }}{{ default $.Values.defaults.jobManager.memory $job.jobManager.memory | default $.Values.defaults.jobManager.memory | quote }}{{ else }}{{ $.Values.defaults.jobManager.memory | quote }}{{ end }}
+      cpu: {{ if $job.jobManager }}{{ default $.Values.defaults.jobManager.cpu $job.jobManager.cpu | default $.Values.defaults.jobManager.cpu }}{{ else }}{{ $.Values.defaults.jobManager.cpu }}{{ end }}
+    podTemplate:
+      metadata:
+        annotations:
+          prometheus.io/scrape: "true"
+          prometheus.io/port: "9249"
+          prometheus.io/path: "/"
+      spec:
+        containers:
+          - name: flink-main-container
+            env:
+              # S3 credentials from Kubernetes Secret (used by Flink S3 filesystem)
+              - name: AWS_ACCESS_KEY_ID
+                valueFrom:
+                  secretKeyRef:
+                    name: {{ include "flink-autoscale.fullname" $ }}-{{ $job.name }}-s3-credentials
+                    key: s3.access-key
+              - name: AWS_SECRET_ACCESS_KEY
+                valueFrom:
+                  secretKeyRef:
+                    name: {{ include "flink-autoscale.fullname" $ }}-{{ $job.name }}-s3-credentials
+                    key: s3.secret-key
+            resources:
+              requests:
+                cpu: {{ default $.Values.defaults.jobManager.resources.requests.cpu $job.jobManager.resources.requests.cpu | default $.Values.defaults.jobManager.resources.requests.cpu | quote }}
+                memory: {{ default $.Values.defaults.jobManager.resources.requests.memory $job.jobManager.resources.requests.memory | default $.Values.defaults.jobManager.resources.requests.memory | quote }}
+              limits:
+                cpu: {{ default $.Values.defaults.jobManager.resources.limits.cpu $job.jobManager.resources.limits.cpu | default $.Values.defaults.jobManager.resources.limits.cpu | quote }}
+                memory: {{ default $.Values.defaults.jobManager.resources.limits.memory $job.jobManager.resources.limits.memory | default $.Values.defaults.jobManager.resources.limits.memory | quote }}
+            volumeMounts:
+              - name: flink-state
+                mountPath: /opt/flink/state
+        volumes:
+          - name: flink-state
+            {{- if $.Values.defaults.persistence.enabled }}
+            persistentVolumeClaim:
+              claimName: {{ include "flink-autoscale.fullname" $ }}-{{ $job.name }}-state
+            {{- else }}
+            emptyDir: {}
+            {{- end }}
+
+  taskManager:
+    # Note: replicas not set in Native mode - let Flink dynamically provision TaskManagers based on slot requirements
+    resource:
+      memory: {{ if $job.taskManager }}{{ default $.Values.defaults.taskManager.memory $job.taskManager.memory | default $.Values.defaults.taskManager.memory | quote }}{{ else }}{{ $.Values.defaults.taskManager.memory | quote }}{{ end }}
+      cpu: {{ if $job.taskManager }}{{ default $.Values.defaults.taskManager.cpu $job.taskManager.cpu | default $.Values.defaults.taskManager.cpu }}{{ else }}{{ $.Values.defaults.taskManager.cpu }}{{ end }}
+    podTemplate:
+      metadata:
+        annotations:
+          prometheus.io/scrape: "true"
+          prometheus.io/port: "9249"
+          prometheus.io/path: "/"
+      spec:
+        containers:
+          - name: flink-main-container
+            env:
+              # S3 credentials from Kubernetes Secret (used by Flink S3 filesystem)
+              - name: AWS_ACCESS_KEY_ID
+                valueFrom:
+                  secretKeyRef:
+                    name: {{ include "flink-autoscale.fullname" $ }}-{{ $job.name }}-s3-credentials
+                    key: s3.access-key
+              - name: AWS_SECRET_ACCESS_KEY
+                valueFrom:
+                  secretKeyRef:
+                    name: {{ include "flink-autoscale.fullname" $ }}-{{ $job.name }}-s3-credentials
+                    key: s3.secret-key
+            resources:
+              requests:
+                cpu: {{ default $.Values.defaults.taskManager.resources.requests.cpu $job.taskManager.resources.requests.cpu | default $.Values.defaults.taskManager.resources.requests.cpu | quote }}
+                memory: {{ default $.Values.defaults.taskManager.resources.requests.memory $job.taskManager.resources.requests.memory | default $.Values.defaults.taskManager.resources.requests.memory | quote }}
+              limits:
+                cpu: {{ default $.Values.defaults.taskManager.resources.limits.cpu $job.taskManager.resources.limits.cpu | default $.Values.defaults.taskManager.resources.limits.cpu | quote }}
+                memory: {{ default $.Values.defaults.taskManager.resources.limits.memory $job.taskManager.resources.limits.memory | default $.Values.defaults.taskManager.resources.limits.memory | quote }}
+            volumeMounts:
+              - name: flink-state
+                mountPath: /opt/flink/state
+        volumes:
+          - name: flink-state
+            {{- if $.Values.defaults.persistence.enabled }}
+            persistentVolumeClaim:
+              claimName: {{ include "flink-autoscale.fullname" $ }}-{{ $job.name }}-state
+            {{- else }}
+            emptyDir: {}
+            {{- end }}
+
+  flinkConfiguration:
+    taskmanager.numberOfTaskSlots: "{{ default $.Values.defaults.taskManager.slots $job.taskManager.slots | default $.Values.defaults.taskManager.slots }}"
+    {{- if $job.flinkConfiguration }}
+    {{- range $key, $value := $job.flinkConfiguration }}
+    {{ $key }}: {{ $value | quote }}
+    {{- end }}
+    {{- else }}
+    state.backend.type: hashmap
+    state.checkpoints.dir: file:///tmp/flink-checkpoints
+    state.savepoints.dir: file:///tmp/flink-savepoints
+    execution.checkpointing.interval: "30s"
+    {{- end }}
+    {{- $autoscalerEnabled := $.Values.defaults.autoscaler.enabled }}
+    {{- if $job.autoscaler }}
+    {{- if hasKey $job.autoscaler "enabled" }}
+    {{- $autoscalerEnabled = $job.autoscaler.enabled }}
+    {{- end }}
+    {{- end }}
+    {{- if $autoscalerEnabled }}
+    # Flink Operator Autoscaler Configuration
+    {{- $stabilizationInterval := $.Values.defaults.autoscaler.stabilizationInterval }}
+    {{- if and $job.autoscaler (hasKey $job.autoscaler "stabilizationInterval") }}
+    {{- $stabilizationInterval = $job.autoscaler.stabilizationInterval }}
+    {{- end }}
+    {{- $metricsWindow := $.Values.defaults.autoscaler.metricsWindow }}
+    {{- if and $job.autoscaler (hasKey $job.autoscaler "metricsWindow") }}
+    {{- $metricsWindow = $job.autoscaler.metricsWindow }}
+    {{- end }}
+    {{- $targetUtilization := $.Values.defaults.autoscaler.targetUtilization }}
+    {{- if and $job.autoscaler (hasKey $job.autoscaler "targetUtilization") }}
+    {{- $targetUtilization = $job.autoscaler.targetUtilization }}
+    {{- end }}
+    {{- $targetUtilizationBoundary := $.Values.defaults.autoscaler.targetUtilizationBoundary }}
+    {{- if and $job.autoscaler (hasKey $job.autoscaler "targetUtilizationBoundary") }}
+    {{- $targetUtilizationBoundary = $job.autoscaler.targetUtilizationBoundary }}
+    {{- end }}
+    {{- $scaleUpGracePeriod := $.Values.defaults.autoscaler.scaleUpGracePeriod }}
+    {{- if and $job.autoscaler (hasKey $job.autoscaler "scaleUpGracePeriod") }}
+    {{- $scaleUpGracePeriod = $job.autoscaler.scaleUpGracePeriod }}
+    {{- end }}
+    {{- $scaleDownGracePeriod := $.Values.defaults.autoscaler.scaleDownGracePeriod }}
+    {{- if and $job.autoscaler (hasKey $job.autoscaler "scaleDownGracePeriod") }}
+    {{- $scaleDownGracePeriod = $job.autoscaler.scaleDownGracePeriod }}
+    {{- end }}
+    {{- $minParallelism := $.Values.defaults.autoscaler.minParallelism }}
+    {{- if and $job.autoscaler (hasKey $job.autoscaler "minParallelism") }}
+    {{- $minParallelism = $job.autoscaler.minParallelism }}
+    {{- end }}
+    {{- $maxParallelism := $.Values.defaults.autoscaler.maxParallelism }}
+    {{- if and $job.autoscaler (hasKey $job.autoscaler "maxParallelism") }}
+    {{- $maxParallelism = $job.autoscaler.maxParallelism }}
+    {{- end }}
+    kubernetes.operator.job.autoscaler.enabled: "true"
+    kubernetes.operator.job.autoscaler.stabilization.interval: {{ $stabilizationInterval | quote }}
+    kubernetes.operator.job.autoscaler.metrics.window: {{ $metricsWindow | quote }}
+    kubernetes.operator.job.autoscaler.target.utilization: {{ $targetUtilization | quote }}
+    kubernetes.operator.job.autoscaler.target.utilization.boundary: {{ $targetUtilizationBoundary | quote }}
+    kubernetes.operator.job.autoscaler.scale-up.grace-period: {{ $scaleUpGracePeriod | quote }}
+    kubernetes.operator.job.autoscaler.scale-down.grace-period: {{ $scaleDownGracePeriod | quote }}
+    kubernetes.operator.job.autoscaler.parallelism.min: {{ $minParallelism | quote }}
+    kubernetes.operator.job.autoscaler.parallelism.max: {{ $maxParallelism | quote }}
+    {{- end }}
+
+  {{- if $job.job }}
+  # Application Mode: Job specification provided
+  job:
+    jarURI: {{ $job.job.jarURI | quote }}
+    {{- if $job.job.entryClass }}
+    entryClass: {{ $job.job.entryClass | quote }}
+    {{- end }}
+    parallelism: {{ $job.job.parallelism }}
+    {{- if $job.job.upgradeMode }}
+    upgradeMode: {{ $job.job.upgradeMode }}
+    {{- end }}
+    {{- if hasKey $job.job "allowNonRestoredState" }}
+    allowNonRestoredState: {{ $job.job.allowNonRestoredState }}
+    {{- end }}
+    {{- if $job.job.state }}
+    state: {{ $job.job.state }}
+    {{- end }}
+    {{- if $job.job.args }}
+    args:
+    {{- range $job.job.args }}
+      - {{ . | quote }}
+    {{- end }}
+    {{- end }}
+  {{- end }}
+
+  mode: native
+{{- end }}
+{{- end }}

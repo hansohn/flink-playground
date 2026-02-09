@@ -1,6 +1,0 @@
-apiVersion: v2
-name: vertical-pod-autoscaler
-description: Vertical Pod Autoscaler for Kubernetes - configurable multi-component deployment
-type: application
-version: 0.1.0
-appVersion: "1.0.0"

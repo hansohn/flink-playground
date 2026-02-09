@@ -1,0 +1,16 @@
+# Maven build artifacts (except the final JAR)
+target/*
+!target/autoscaling-load-job.jar
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+.DS_Store
+
+# Version control
+.git/
+.gitignore
+
+# Documentation
+*.md

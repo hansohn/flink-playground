@@ -31,6 +31,15 @@
 hs_err_pid*
 replay_pid*
 
+# Maven
+target/
+dependency-reduced-pom.xml
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+
 ### Linux ###
 *~
 

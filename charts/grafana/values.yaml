@@ -1,0 +1,88 @@
+# Grafana configuration for Flink monitoring
+# Wraps the official Grafana Helm chart with pre-configured dashboards and data sources
+
+grafana:
+  # Admin credentials
+  adminUser: admin
+  adminPassword: admin  # Change in production
+
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 80
+
+  # Resources
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  # Persistence (disabled for POC)
+  persistence:
+    enabled: false
+
+  # Data sources
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+        - name: Prometheus
+          type: prometheus
+          url: http://prometheus-prometheus.monitoring.svc.cluster.local:9090
+          access: proxy
+          isDefault: true
+          editable: true
+        - name: Loki
+          type: loki
+          url: http://loki-gateway.monitoring.svc.cluster.local
+          access: proxy
+          editable: true
+          jsonData:
+            derivedFields:
+              - name: TraceID
+                datasourceUid: tempo
+                matcherRegex: "traceID=(\\w+)"
+                url: "$${__value.raw}"
+        - name: Tempo
+          type: tempo
+          uid: tempo
+          url: http://tempo.monitoring.svc.cluster.local:3200
+          access: proxy
+          editable: true
+          jsonData:
+            tracesToLogs:
+              datasourceUid: loki
+              filterByTraceID: true
+              filterBySpanID: false
+              mapTagNamesEnabled: true
+              mappedTags:
+                - key: service.name
+                  value: service
+              lokiSearch:
+                datasourceUid: loki
+
+  # Enable sidecar for dashboard discovery
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      folder: /tmp/dashboards
+      defaultFolderName: Flink
+      searchNamespace: ALL
+      provider:
+        foldersFromFilesStructure: true
+
+  # Grafana ini configuration
+  grafana.ini:
+    server:
+      root_url: "%(protocol)s://%(domain)s:%(http_port)s/"
+    analytics:
+      check_for_updates: false
+    log:
+      mode: console
+    grafana_net:
+      url: https://grafana.net

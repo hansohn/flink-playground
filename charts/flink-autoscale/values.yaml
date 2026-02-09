@@ -1,46 +1,241 @@
-image:
-  repository: flink
-  tag: "1.18-scala_2.12"
-  pullPolicy: IfNotPresent
+# Global defaults for all jobs
+# Can be overridden per-job in the jobs list below
+defaults:
+  image:
+    repository: flink
+    tag: "1.18-scala_2.12"
+    pullPolicy: IfNotPresent
 
-jobManager:
-  replicas: 1
-  resources:
-    requests:
-      cpu: "250m"
-      memory: "512Mi"
-    limits:
-      cpu: "1"
-      memory: "1Gi"
-  service:
-    nodePort: 30081
-    webPort: 8081
-    rpcPort: 6123
+  # Persistent storage for Flink state (checkpoints/savepoints)
+  # DISABLED: Now using MinIO (S3-compatible) for state storage
+  # PVC-based storage is only suitable for POC, not production
+  persistence:
+    enabled: false
+    storageClassName: "standard"  # Kind's local-path provisioner
+    size: "1Gi"
 
-taskManager:
-  replicas: 1
-  resources:
-    requests:
-      cpu: "250m"
-      memory: "512Mi"
-    limits:
-      cpu: "1"
-      memory: "1Gi"
-  slots: 2
+  jobManager:
+    replicas: 1
+    # CPU for Flink resource spec (numeric, in cores)
+    cpu: 0.5
+    # Memory for Flink resource spec (Kubernetes format)
+    memory: "1024Mi"
+    # Kubernetes pod resources (for podTemplate)
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "1Gi"
+      limits:
+        cpu: "1"
+        memory: "2Gi"
 
-hpa:
-  enabled: true
-  minReplicas: 1
-  maxReplicas: 10
-  targetCPUUtilization: 70   # horizontal scaling on CPU
+  taskManager:
+    replicas: 1
+    # CPU for Flink resource spec (numeric, in cores)
+    cpu: 0.5
+    # Memory for Flink resource spec (Kubernetes format)
+    memory: "1024Mi"
+    # Kubernetes pod resources (for podTemplate)
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "1Gi"
+      limits:
+        cpu: "2"
+        memory: "2Gi"
+    slots: 2
 
-vpa:
-  enabled: true
-  updateMode: "Auto"         # "Off" | "Initial" | "Auto" | "Recreate"
-  # We only want vertical scaling on memory, so we control memory only.
-  controlledResources:
-    - "memory"
-  minAllowed:
-    memory: "256Mi"
-  maxAllowed:
-    memory: "2Gi"
+  # VPA Configuration - DISABLED (incompatible with native mode)
+  # Use Flink Autotuning instead for memory optimization
+  vpa:
+    enabled: false
+
+  # Flink Kubernetes Operator Autoscaler Configuration
+  autoscaler:
+    enabled: true
+    metricsWindow: "5m"
+    stabilizationInterval: "1m"
+    targetUtilization: "0.7"
+    targetUtilizationBoundary: "0.1"
+    scaleUpGracePeriod: "1m"
+    scaleDownGracePeriod: "3m"
+    minParallelism: 1
+    maxParallelism: 10
+
+  # S3 Credentials (stored in Kubernetes Secret)
+  # These credentials are injected as environment variables (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)
+  # and used by Flink's S3 filesystem plugin
+  # NOTE: Change these values or override per-job for production deployments
+  s3:
+    accessKey: admin
+    secretKey: password123
+
+# Define multiple Flink jobs
+# Each job creates a separate FlinkDeployment (cluster + job)
+jobs:
+  # Example 1: Autoscaling Load Job
+  - name: autoscaling-load
+    enabled: true
+
+    # Use custom image with JAR bundled (includes S3 plugin for MinIO)
+    image:
+      repository: hansohn/flink-autoscaling-load
+      tag: "1.1.0"
+      pullPolicy: IfNotPresent
+
+    # S3 Credentials (inherits from defaults if not specified)
+    # Stored in Kubernetes Secret and injected as environment variables
+    s3:
+      accessKey: admin
+      secretKey: password123
+
+    # Job specification (Application Mode)
+    job:
+      jarURI: "local:///opt/flink/usrlib/autoscaling-load-job.jar"
+      entryClass: "com.example.flink.AutoscalingLoadJob"
+      parallelism: 2
+      # Use savepoint mode for reliable restarts during scaling events
+      # Creates explicit savepoint before suspending (more reliable than last-state)
+      # Falls back gracefully if savepoint missing or incomplete
+      # Autoscaler parallelism decisions persist in FlinkDeployment spec + ConfigMap
+      upgradeMode: savepoint
+      # Allow job to start even if savepoint is incomplete
+      allowNonRestoredState: true
+      state: running
+      args:
+        - "--source-type"
+        - "kafka"
+        - "--kafka-bootstrap-servers"
+        - "kafka-local-kafka-bootstrap.kafka.svc.cluster.local:9092"
+        - "--kafka-topic"
+        - "load-events"
+        - "--cpu-iterations"
+        - "1500"
+
+    # Override resources if needed
+    jobManager:
+      cpu: 0.5
+      memory: "1024Mi"
+      resources:
+        requests:
+          cpu: "250m"
+          memory: "1Gi"
+        limits:
+          cpu: "1"
+          memory: "2Gi"
+
+    taskManager:
+      cpu: 0.25
+      memory: "1024Mi"
+      resources:
+        requests:
+          cpu: "125m"
+          memory: "1Gi"
+        limits:
+          cpu: "500m"
+          memory: "2Gi"
+      slots: 2
+
+    # Override VPA settings if needed (inherits from defaults if not specified)
+    # vpa:
+    #   enabled: true
+    #   updateMode: "Auto"
+
+    # Override autoscaler settings if needed
+    autoscaler:
+      enabled: true
+      targetUtilization: "0.7"
+      minParallelism: 1
+      maxParallelism: 10
+
+    # Additional Flink configuration
+    # Using RocksDB state backend with MinIO (S3-compatible) for state durability
+    # MinIO runs in 'storage' namespace, provides production-like object storage for POC
+    # State persists across pod deletions, scaling events, and image updates
+    # For production: Change endpoint to AWS S3, update credentials via s3 section above
+    flinkConfiguration:
+      state.backend.type: rocksdb
+      state.backend.incremental: "true"
+      # MinIO S3-compatible storage (cross-namespace access)
+      state.checkpoints.dir: s3://flink-state/checkpoints/autoscaling-load
+      state.savepoints.dir: s3://flink-state/savepoints/autoscaling-load
+      # MinIO endpoint configuration (storage namespace)
+      # NOTE: S3 credentials are injected as environment variables from Kubernetes Secret
+      # (AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY)
+      s3.endpoint: http://minio.storage.svc.cluster.local:9000
+      s3.path.style.access: "true"
+      s3.connection.ssl.enabled: "false"
+      execution.checkpointing.interval: "30s"
+      # Retain checkpoints when job is cancelled (for last-state/savepoint modes)
+      execution.checkpointing.externalized-checkpoint-retention: RETAIN_ON_CANCELLATION
+      # Prometheus metrics reporter
+      metrics.reporter.prom.factory.class: org.apache.flink.metrics.prometheus.PrometheusReporterFactory
+      metrics.reporter.prom.port: "9249"
+      # OpenTelemetry tracing via Java agent
+      env.java.opts.all: "-javaagent:/opt/flink/lib/opentelemetry-javaagent.jar"
+      containerized.master.env.OTEL_SERVICE_NAME: flink-autoscaling-load
+      containerized.master.env.OTEL_TRACES_EXPORTER: otlp
+      containerized.master.env.OTEL_EXPORTER_OTLP_ENDPOINT: "http://tempo.monitoring.svc.cluster.local:4317"
+      containerized.master.env.OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      containerized.taskmanager.env.OTEL_SERVICE_NAME: flink-autoscaling-load
+      containerized.taskmanager.env.OTEL_TRACES_EXPORTER: otlp
+      containerized.taskmanager.env.OTEL_EXPORTER_OTLP_ENDPOINT: "http://tempo.monitoring.svc.cluster.local:4317"
+      containerized.taskmanager.env.OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      # Flink Autotuning - automatic memory optimization
+      kubernetes.operator.job.autoscaler.memory.tuning.enabled: "true"
+      kubernetes.operator.job.autoscaler.memory.tuning.overhead: "0.2"
+
+  # Example 2: Analytics Pipeline (disabled by default)
+  # Uncomment to enable
+  # - name: analytics-pipeline
+  #   enabled: false
+  #
+  #   job:
+  #     jarURI: "local:///opt/flink/usrlib/analytics-pipeline.jar"
+  #     entryClass: "com.example.flink.AnalyticsPipeline"
+  #     parallelism: 4
+  #     upgradeMode: savepoint
+  #     state: running
+  #
+  #   autoscaler:
+  #     enabled: true
+  #     targetUtilization: "0.8"  # More aggressive scaling
+  #     minParallelism: 2
+  #     maxParallelism: 20
+  #
+  #   # Different VPA settings for this job
+  #   vpa:
+  #     enabled: true
+  #     updateMode: "Auto"
+  #     controlledResources:
+  #       - "memory"
+  #     minAllowed:
+  #       memory: "512Mi"
+  #     maxAllowed:
+  #       memory: "4Gi"
+  #
+  #   taskManager:
+  #     resources:
+  #       requests:
+  #         cpu: "500m"
+  #         memory: "1Gi"
+  #       limits:
+  #         cpu: "2"
+  #         memory: "2Gi"
+  #     slots: 4
+
+  # Example 3: Session Cluster (no job defined)
+  # Uncomment to enable
+  # - name: dev-session
+  #   enabled: false
+  #
+  #   # No job section = Session Mode
+  #   # Submit jobs manually via CLI/UI
+  #
+  #   # Disable autoscaler for session mode
+  #   autoscaler:
+  #     enabled: false
+  #
+  #   taskManager:
+  #     replicas: 2
+  #     slots: 4

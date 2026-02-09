@@ -1,0 +1,277 @@
+# Production-optimized values for Flink Autoscale
+# Usage: helm install flink-autoscale charts/flink-autoscale -f charts/flink-autoscale/values-production.yaml
+
+# Global defaults for all jobs
+defaults:
+  image:
+    repository: flink
+    tag: "1.18-scala_2.12"
+    pullPolicy: IfNotPresent
+
+  # Persistent storage DISABLED - using MinIO/S3 for state storage
+  persistence:
+    enabled: false
+    storageClassName: "standard"
+    size: "1Gi"
+
+  jobManager:
+    replicas: 1
+    # Production-sized JobManager
+    cpu: 1.0
+    memory: "2048Mi"
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "2Gi"
+      limits:
+        cpu: "2"
+        memory: "3Gi"
+
+  taskManager:
+    replicas: 1
+    # Production-sized TaskManager with increased resources
+    cpu: 2.0
+    memory: "4096Mi"
+    resources:
+      requests:
+        cpu: "1000m"  # 1 core guaranteed
+        memory: "4Gi"
+      limits:
+        cpu: "4"  # Allow bursting to 4 cores
+        memory: "5Gi"  # Extra headroom for overhead
+    slots: 4  # 2 slots per core for good balance
+
+  # VPA Configuration - DISABLED (incompatible with native mode)
+  vpa:
+    enabled: false
+
+  # Flink Kubernetes Operator Autoscaler Configuration
+  autoscaler:
+    enabled: true
+    metricsWindow: "5m"
+    stabilizationInterval: "2m"  # Increased for stability
+    targetUtilization: "0.7"
+    targetUtilizationBoundary: "0.1"
+    scaleUpGracePeriod: "2m"  # Increased for production
+    scaleDownGracePeriod: "5m"  # Increased to prevent flapping
+    minParallelism: 2  # At least 2 for HA
+    maxParallelism: 20
+
+  # S3 Credentials (stored in Kubernetes Secret)
+  s3:
+    accessKey: admin
+    secretKey: password123
+
+# Define multiple Flink jobs
+jobs:
+  # Production Autoscaling Load Job
+  - name: autoscaling-load
+    enabled: true
+
+    # Use custom image with JAR bundled (includes S3 plugin for MinIO)
+    image:
+      repository: flink-autoscaling-load
+      tag: "1.0.1"
+      pullPolicy: IfNotPresent
+
+    # S3 Credentials (inherits from defaults if not specified)
+    s3:
+      accessKey: admin
+      secretKey: password123
+
+    # Job specification (Application Mode)
+    job:
+      jarURI: "local:///opt/flink/usrlib/autoscaling-load-job.jar"
+      entryClass: "com.example.flink.AutoscalingLoadJob"
+      parallelism: 4  # Start with slots * initial TMs
+      upgradeMode: savepoint
+      allowNonRestoredState: true
+      state: running
+      args: []
+
+    # Production-sized JobManager
+    jobManager:
+      cpu: 1.0
+      memory: "2048Mi"
+      resources:
+        requests:
+          cpu: "500m"
+          memory: "2Gi"
+        limits:
+          cpu: "2"
+          memory: "3Gi"
+
+    # Production-sized TaskManager
+    taskManager:
+      cpu: 2.0
+      memory: "4096Mi"
+      resources:
+        requests:
+          cpu: "1000m"
+          memory: "4Gi"
+        limits:
+          cpu: "4"
+          memory: "5Gi"
+      slots: 4
+
+    # Production autoscaler settings
+    autoscaler:
+      enabled: true
+      targetUtilization: "0.7"
+      minParallelism: 2
+      maxParallelism: 20
+      stabilizationInterval: "2m"
+      scaleUpGracePeriod: "2m"
+      scaleDownGracePeriod: "5m"
+
+    # Production Flink configuration with memory optimizations
+    flinkConfiguration:
+      # ============================================================
+      # State Backend Configuration
+      # ============================================================
+      state.backend.type: rocksdb
+      state.backend.incremental: "true"
+
+      # RocksDB Predefined Options (optimized for SSD)
+      state.backend.rocksdb.predefined-options: "FLASH_SSD_OPTIMIZED"
+
+      # RocksDB Memory Management
+      state.backend.rocksdb.memory.managed: "true"
+      state.backend.rocksdb.memory.write-buffer-ratio: "0.5"
+      state.backend.rocksdb.memory.high-prio-pool-ratio: "0.1"
+
+      # RocksDB Performance Tuning
+      state.backend.rocksdb.block.cache-size: "256m"
+      state.backend.rocksdb.writebuffer.size: "64m"
+      state.backend.rocksdb.writebuffer.count: "4"
+      state.backend.rocksdb.thread.num: "2"
+
+      # RocksDB Bloom Filters (reduce disk reads)
+      state.backend.rocksdb.bloom-filter.bits-per-key: "10"
+      state.backend.rocksdb.bloom-filter.block-based-mode: "true"
+
+      # RocksDB Compression (reduces checkpoint size)
+      state.backend.rocksdb.compression.per.level: "NO_COMPRESSION,NO_COMPRESSION,SNAPPY_COMPRESSION,SNAPPY_COMPRESSION,SNAPPY_COMPRESSION,SNAPPY_COMPRESSION,SNAPPY_COMPRESSION"
+
+      # RocksDB Local Directory
+      state.backend.rocksdb.localdir: "/opt/flink/state/rocksdb"
+
+      # RocksDB Timer Service
+      state.backend.rocksdb.timer-service.factory: "ROCKSDB"
+
+      # ============================================================
+      # S3 State Storage Configuration
+      # ============================================================
+      # MinIO S3-compatible storage (cross-namespace access)
+      state.checkpoints.dir: s3://flink-state/checkpoints/autoscaling-load
+      state.savepoints.dir: s3://flink-state/savepoints/autoscaling-load
+
+      # MinIO endpoint configuration
+      # NOTE: S3 credentials injected as environment variables from Kubernetes Secret
+      s3.endpoint: http://minio.storage.svc.cluster.local:9000
+      s3.path.style.access: "true"
+      s3.connection.ssl.enabled: "false"
+
+      # ============================================================
+      # Checkpointing Configuration
+      # ============================================================
+      execution.checkpointing.interval: "60s"
+      execution.checkpointing.min-pause: "30s"
+      execution.checkpointing.timeout: "10m"
+      execution.checkpointing.max-concurrent-checkpoints: "1"
+
+      # Unaligned checkpoints (faster under backpressure)
+      execution.checkpointing.unaligned.enabled: "true"
+      execution.checkpointing.alignment-timeout: "30s"
+
+      # Retain checkpoints when job is cancelled
+      execution.checkpointing.externalized-checkpoint-retention: RETAIN_ON_CANCELLATION
+      state.checkpoints.num-retained: "3"
+
+      # ============================================================
+      # Memory Configuration - TaskManager
+      # ============================================================
+      # Total process memory (5Gi limit - 256Mi overhead)
+      taskmanager.memory.process.size: "4864Mi"
+
+      # Managed memory fraction (for RocksDB)
+      taskmanager.memory.managed.fraction: "0.4"
+
+      # Network buffer memory
+      taskmanager.memory.network.fraction: "0.1"
+      taskmanager.memory.network.min: "128Mi"
+      taskmanager.memory.network.max: "512Mi"
+
+      # JVM overhead (GC, thread stacks, etc.)
+      taskmanager.memory.jvm-overhead.fraction: "0.1"
+      taskmanager.memory.jvm-overhead.min: "256Mi"
+      taskmanager.memory.jvm-overhead.max: "512Mi"
+
+      # JVM Metaspace
+      taskmanager.memory.jvm-metaspace.size: "256Mi"
+
+      # ============================================================
+      # Memory Configuration - JobManager
+      # ============================================================
+      jobmanager.memory.process.size: "2560Mi"
+      jobmanager.memory.flink.size: "2048Mi"
+      jobmanager.memory.heap.size: "1536Mi"
+      jobmanager.memory.jvm-metaspace.size: "256Mi"
+      jobmanager.memory.jvm-overhead.min: "192Mi"
+      jobmanager.memory.jvm-overhead.max: "256Mi"
+
+      # ============================================================
+      # Network Buffer Configuration
+      # ============================================================
+      taskmanager.network.memory.buffers-per-channel: "2"
+      taskmanager.network.memory.floating-buffers-per-gate: "8"
+      execution.buffer-timeout: "100ms"
+
+      # TCP buffer configuration
+      taskmanager.network.netty.server.backlog: "2048"
+      taskmanager.network.netty.client.connectTimeoutSec: "120"
+      taskmanager.network.netty.sendReceiveBufferSize: "0"
+
+      # ============================================================
+      # Metrics Configuration
+      # ============================================================
+      # Prometheus metrics reporter
+      metrics.reporter.prom.factory.class: org.apache.flink.metrics.prometheus.PrometheusReporterFactory
+      metrics.reporter.prom.port: "9249"
+
+      # Metrics scope
+      metrics.scope.jm: "flink_jobmanager"
+      metrics.scope.tm: "flink_taskmanager"
+
+      # Latency tracking
+      metrics.latency.interval: "60000"
+      metrics.latency.granularity: "operator"
+
+      # System resource metrics
+      metrics.system-resource: "true"
+      metrics.system-resource-probing-interval: "5000"
+
+      # ============================================================
+      # Autoscaler Memory Tuning
+      # ============================================================
+      kubernetes.operator.job.autoscaler.memory.tuning.enabled: "true"
+      kubernetes.operator.job.autoscaler.memory.tuning.overhead: "0.2"
+
+      # ============================================================
+      # Additional Production Settings
+      # ============================================================
+      # Restart strategy
+      restart-strategy: "failure-rate"
+      restart-strategy.failure-rate.max-failures-per-interval: "3"
+      restart-strategy.failure-rate.failure-rate-interval: "5min"
+      restart-strategy.failure-rate.delay: "30s"
+
+      # Slot sharing (enable for better resource utilization)
+      cluster.evenly-spread-out-slots: "true"
+
+      # Classloader settings
+      classloader.resolve-order: "child-first"
+      classloader.check-leaked-classloader: "true"
+
+      # Task cancellation timeout
+      task.cancellation.timeout: "180s"

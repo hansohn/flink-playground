@@ -41,7 +41,7 @@ prometheus:
 
 # Prometheus Adapter Component
 adapter:
-  enabled: true
+  enabled: false
   replicaCount: 1
   tag: "v0.11.2"
 
@@ -78,22 +78,44 @@ scrape:
     evaluationInterval: 30s
 
   # Extension point for additional scrape configs (Flink, etc.)
-  # Example for Flink integration:
-  # additionalConfigs: |
-  #   - job_name: 'flink-taskmanager'
-  #     kubernetes_sd_configs:
-  #       - role: pod
-  #         namespaces:
-  #           names: ['flink']
-  #     relabel_configs:
-  #       - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
-  #         action: keep
-  #         regex: true
-  #       - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_port]
-  #         target_label: __address__
-  #         regex: (.+):(?:\d+);(\d+)
-  #         replacement: $1:$2
-  additionalConfigs: ""
+  additionalConfigs: |
+    # Flink JobManager and TaskManager metrics
+    - job_name: 'flink'
+      kubernetes_sd_configs:
+        - role: pod
+          namespaces:
+            names: ['flink']
+      relabel_configs:
+        # Only scrape pods with prometheus.io/scrape annotation
+        - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+          action: keep
+          regex: true
+        # Use prometheus.io/port annotation for metrics port
+        - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_port]
+          action: replace
+          target_label: __meta_kubernetes_pod_container_port_number
+        # Build address from pod IP and port
+        - source_labels: [__meta_kubernetes_pod_ip, __meta_kubernetes_pod_annotation_prometheus_io_port]
+          action: replace
+          target_label: __address__
+          regex: ([^:]+)(?::\d+)?;(\d+)
+          replacement: $1:$2
+        # Add pod name as instance label
+        - source_labels: [__meta_kubernetes_pod_name]
+          action: replace
+          target_label: instance
+        # Add namespace label
+        - source_labels: [__meta_kubernetes_namespace]
+          action: replace
+          target_label: kubernetes_namespace
+        # Add component label (jobmanager or taskmanager)
+        - source_labels: [__meta_kubernetes_pod_label_component]
+          action: replace
+          target_label: component
+        # Add job label
+        - source_labels: [__meta_kubernetes_pod_label_flink_job]
+          action: replace
+          target_label: flink_job
 
 # Custom metrics adapter configuration
 adapterConfig:

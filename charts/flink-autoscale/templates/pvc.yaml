@@ -1,0 +1,22 @@
+{{- range $job := .Values.jobs }}
+{{- if and $job.enabled $.Values.defaults.persistence.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "flink-autoscale.fullname" $ }}-{{ $job.name }}-state
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "flink-autoscale.labels" $ | nindent 4 }}
+    flink-job: {{ $job.name }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- if $.Values.defaults.persistence.storageClassName }}
+  storageClassName: {{ $.Values.defaults.persistence.storageClassName }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ if and $job.persistence (hasKey $job.persistence "size") }}{{ $job.persistence.size }}{{ else }}{{ $.Values.defaults.persistence.size }}{{ end }}
+{{- end }}
+{{- end }}

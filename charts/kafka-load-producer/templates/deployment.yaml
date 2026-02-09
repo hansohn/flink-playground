@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "kafka-load-producer.fullname" . }}
+  labels:
+    {{- include "kafka-load-producer.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels:
+      {{- include "kafka-load-producer.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "kafka-load-producer.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: kafka-load-producer
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - "--bootstrap-servers"
+            - {{ .Values.producer.bootstrapServers | quote }}
+            - "--topic"
+            - {{ .Values.producer.topic | quote }}
+            - "--records-per-second"
+            - {{ .Values.producer.recordsPerSecond | quote }}
+            - "--keys"
+            - {{ .Values.producer.keys | quote }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}

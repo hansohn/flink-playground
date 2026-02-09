@@ -1,0 +1,6 @@
+apiVersion: v2
+name: kafka-load-producer
+description: Kafka load producer for driving Flink autoscaling via consumer lag
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
