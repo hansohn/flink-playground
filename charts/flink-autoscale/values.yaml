@@ -110,7 +110,7 @@ jobs:
         - "--kafka-topic"
         - "load-events"
         - "--cpu-iterations"
-        - "1000"
+        - "3000"
 
     # Override resources if needed
     jobManager:
