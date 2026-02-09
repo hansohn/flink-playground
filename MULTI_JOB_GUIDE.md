@@ -36,7 +36,7 @@ The default `values.yaml` includes one job called `autoscaling-load`:
 make flink/install
 
 # Or using helm directly
-helm install flink-autoscale ./charts/flink-autoscale -n flink --create-namespace
+helm install flink-autoscale ./charts/flink-autoscale -n playground --create-namespace
 ```
 
 This creates:
@@ -92,7 +92,7 @@ jobs:
 Then deploy:
 
 ```bash
-helm upgrade --install flink-autoscale ./charts/flink-autoscale -n flink
+helm upgrade --install flink-autoscale ./charts/flink-autoscale -n playground
 ```
 
 This creates 3 separate FlinkDeployments, each with its own cluster and autoscaler.
@@ -101,7 +101,7 @@ This creates 3 separate FlinkDeployments, each with its own cluster and autoscal
 
 ```bash
 # View all FlinkDeployments
-kubectl get flinkdeployments -n flink
+kubectl get flinkdeployments -n playground
 
 # Example output:
 NAME                                  MODE     STATE
@@ -110,10 +110,10 @@ flink-autoscale-analytics-pipeline   native   RUNNING
 flink-autoscale-etl-job              native   RUNNING
 
 # View all pods
-kubectl get pods -n flink
+kubectl get pods -n playground
 
 # View all VPAs
-kubectl get vpa -n flink
+kubectl get vpa -n playground
 ```
 
 ### 4. Access Flink UI for Specific Job
@@ -122,10 +122,10 @@ The JobManager service is created per job:
 
 ```bash
 # Port-forward to specific job's UI
-kubectl port-forward -n flink svc/flink-autoscale-autoscaling-load-jobmanager 8081:8081
+kubectl port-forward -n playground svc/flink-autoscale-autoscaling-load-jobmanager 8081:8081
 
 # Or for analytics-pipeline
-kubectl port-forward -n flink svc/flink-autoscale-analytics-pipeline-jobmanager 8082:8081
+kubectl port-forward -n playground svc/flink-autoscale-analytics-pipeline-jobmanager 8082:8081
 ```
 
 ## Configuration Reference
@@ -248,7 +248,7 @@ jobs:
 Then submit jobs manually via CLI:
 
 ```bash
-kubectl port-forward -n flink svc/flink-autoscale-dev-session-jobmanager 8081:8081
+kubectl port-forward -n playground svc/flink-autoscale-dev-session-jobmanager 8081:8081
 # Visit http://localhost:8081 and submit JAR via UI
 ```
 
@@ -277,8 +277,8 @@ jobs:
       targetUtilization: "0.8"
 
 # Deploy to different namespaces
-helm install flink-dev ./charts/flink-autoscale -f values-dev.yaml -n flink-dev
-helm install flink-prod ./charts/flink-autoscale -f values-prod.yaml -n flink-prod
+helm install flink-dev ./charts/flink-autoscale -f values-dev.yaml -n playground-dev
+helm install flink-prod ./charts/flink-autoscale -f values-prod.yaml -n playground-prod
 ```
 
 ### Pattern 3: Selective Deployment
@@ -326,36 +326,36 @@ jobs:
 
 ```bash
 # FlinkDeployments
-kubectl get flinkdeployments -n flink -o wide
+kubectl get flinkdeployments -n playground -o wide
 
 # Pods
-kubectl get pods -n flink -l app.kubernetes.io/name=flink-autoscale
+kubectl get pods -n playground -l app.kubernetes.io/name=flink-autoscale
 
 # Filter by specific job
-kubectl get pods -n flink -l flink-job=autoscaling-load
+kubectl get pods -n playground -l flink-job=autoscaling-load
 ```
 
 ### Monitor Autoscaling
 
 ```bash
 # Watch FlinkDeployment status
-kubectl get flinkdeployments -n flink -w
+kubectl get flinkdeployments -n playground -w
 
 # View operator logs (autoscaling decisions)
-kubectl logs -n flink-operator deployment/flink-kubernetes-operator -f | grep autoscal
+kubectl logs -n playground-operator deployment/flink-kubernetes-operator -f | grep autoscal
 
 # Check specific job's scaling
-kubectl describe flinkdeployment -n flink flink-autoscale-analytics-pipeline
+kubectl describe flinkdeployment -n playground flink-autoscale-analytics-pipeline
 ```
 
 ### Monitor VPA Recommendations
 
 ```bash
 # View VPA recommendations for all jobs
-kubectl get vpa -n flink
+kubectl get vpa -n playground
 
 # Describe specific VPA
-kubectl describe vpa -n flink flink-autoscale-autoscaling-load-taskmanager
+kubectl describe vpa -n playground flink-autoscale-autoscaling-load-taskmanager
 ```
 
 ## Troubleshooting
@@ -364,33 +364,33 @@ kubectl describe vpa -n flink flink-autoscale-autoscaling-load-taskmanager
 
 ```bash
 # Check FlinkDeployment status
-kubectl describe flinkdeployment -n flink flink-autoscale-<job-name>
+kubectl describe flinkdeployment -n playground flink-autoscale-<job-name>
 
 # Check operator logs
-kubectl logs -n flink-operator deployment/flink-kubernetes-operator
+kubectl logs -n playground-operator deployment/flink-kubernetes-operator
 
 # Check JobManager logs
-kubectl logs -n flink -l flink-job=<job-name>,component=jobmanager
+kubectl logs -n playground -l flink-job=<job-name>,component=jobmanager
 ```
 
 ### Autoscaler Not Scaling
 
 ```bash
 # Verify autoscaler is enabled in FlinkDeployment
-kubectl get flinkdeployment -n flink flink-autoscale-<job-name> -o yaml | grep autoscaler
+kubectl get flinkdeployment -n playground flink-autoscale-<job-name> -o yaml | grep autoscaler
 
 # Check operator logs for scaling decisions
-kubectl logs -n flink-operator deployment/flink-kubernetes-operator | grep -i "autoscal.*<job-name>"
+kubectl logs -n playground-operator deployment/flink-kubernetes-operator | grep -i "autoscal.*<job-name>"
 ```
 
 ### VPA Not Updating Resources
 
 ```bash
 # Check VPA status
-kubectl describe vpa -n flink flink-autoscale-<job-name>-taskmanager
+kubectl describe vpa -n playground flink-autoscale-<job-name>-taskmanager
 
 # Verify VPA is enabled
-helm get values flink-autoscale -n flink
+helm get values flink-autoscale -n playground
 ```
 
 ## Upgrading Jobs
@@ -400,7 +400,7 @@ helm get values flink-autoscale -n flink
 ```bash
 # Edit values.yaml to change job configuration
 # Then upgrade
-helm upgrade flink-autoscale ./charts/flink-autoscale -n flink
+helm upgrade flink-autoscale ./charts/flink-autoscale -n playground
 ```
 
 ### Zero-Downtime Updates
@@ -417,7 +417,7 @@ jobs:
 When you upgrade:
 
 ```bash
-helm upgrade flink-autoscale ./charts/flink-autoscale -n flink
+helm upgrade flink-autoscale ./charts/flink-autoscale -n playground
 ```
 
 The operator will:

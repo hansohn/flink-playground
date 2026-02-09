@@ -30,7 +30,9 @@ argocd/
     ├── loki.yaml
     ├── tempo.yaml
     ├── alloy.yaml
-    ├── vpa.yaml
+    ├── kafka.yaml
+    ├── kafka-load-producer.yaml
+    ├── minio.yaml
     ├── cert-manager.yaml
     ├── flink-operator.yaml
     └── flink-autoscale.yaml

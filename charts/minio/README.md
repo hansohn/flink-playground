@@ -93,8 +93,8 @@ kubectl exec -n storage deployment/minio -- sh -c \
   "mc alias set local http://localhost:9000 admin password123 && \
    mc ls local/flink-state/"
 
-# From Flink namespace (cross-namespace access)
-kubectl exec -n flink deployment/flink-autoscale-autoscaling-load -- \
+# From playground namespace (cross-namespace access)
+kubectl exec -n playground deployment/flink-autoscale-autoscaling-load -- \
   curl -I http://minio.storage.svc.cluster.local:9000/flink-state/
 ```
 

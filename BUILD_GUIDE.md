@@ -50,7 +50,7 @@ make up
 
 This runs all steps automatically:
 1. Creates Kind cluster
-2. Installs all dependencies (metrics-server, Prometheus, VPA, cert-manager, Flink Operator)
+2. Installs all dependencies (metrics-server, Prometheus, cert-manager, Flink Operator)
 3. Builds Maven JAR
 4. Builds Docker image
 5. Loads image into Kind
@@ -65,7 +65,6 @@ If you want more control:
 make kind/up
 make metrics-server/install
 make prometheus/install
-make vpa/install
 make flink-operator/install
 
 # 2. Build Maven JAR

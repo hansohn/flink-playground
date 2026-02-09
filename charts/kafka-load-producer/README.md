@@ -10,7 +10,7 @@ Used to drive realistic autoscaling behavior in the Flink job via Kafka consumer
 | `image.repository` | Docker image repository | `hansohn/kafka-load-producer` |
 | `image.tag` | Docker image tag | `1.0.0` |
 | `replicas` | Number of producer replicas | `1` |
-| `producer.bootstrapServers` | Kafka bootstrap servers | `autoscaling-load-kafka-bootstrap.kafka.svc.cluster.local:9092` |
+| `producer.bootstrapServers` | Kafka bootstrap servers | `kafka-local-kafka-bootstrap.kafka.svc.cluster.local:9092` |
 | `producer.topic` | Target Kafka topic | `load-events` |
 | `producer.recordsPerSecond` | Records produced per second per replica | `1000` |
 | `producer.keys` | Number of distinct keys | `128` |
@@ -24,5 +24,5 @@ Used to drive realistic autoscaling behavior in the Flink job via Kafka consumer
 Scale replicas to multiply throughput:
 
 ```bash
-kubectl scale deployment kafka-load-producer -n kafka --replicas=3
+kubectl scale deployment kafka-load-producer -n playground --replicas=3
 ```

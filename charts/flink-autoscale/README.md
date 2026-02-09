@@ -45,11 +45,11 @@ jobs:
 **Retrieving credentials from cluster:**
 ```bash
 # Get S3 access key
-kubectl get secret flink-autoscale-autoscaling-load-s3-credentials -n flink \
+kubectl get secret flink-autoscale-autoscaling-load-s3-credentials -n playground \
   -o jsonpath='{.data.s3\.access-key}' | base64 -d && echo
 
 # Get S3 secret key
-kubectl get secret flink-autoscale-autoscaling-load-s3-credentials -n flink \
+kubectl get secret flink-autoscale-autoscaling-load-s3-credentials -n playground \
   -o jsonpath='{.data.s3\.secret-key}' | base64 -d && echo
 ```
 
@@ -112,10 +112,10 @@ kubectl get application flink-autoscale -n argocd
 ```bash
 # Install chart with dependencies
 helm dependency update charts/flink-autoscale
-helm install flink-autoscale charts/flink-autoscale -n flink --create-namespace
+helm install flink-autoscale charts/flink-autoscale -n playground --create-namespace
 
 # Upgrade after changes
-helm upgrade flink-autoscale charts/flink-autoscale -n flink
+helm upgrade flink-autoscale charts/flink-autoscale -n playground
 ```
 
 ## Migration to Production AWS S3
@@ -163,19 +163,19 @@ make ui
 Flink pods expose metrics on port 9249:
 ```bash
 # Query metrics from TaskManager pod
-kubectl exec -n flink <taskmanager-pod> -- curl http://localhost:9249/
+kubectl exec -n playground <taskmanager-pod> -- curl http://localhost:9249/
 ```
 
 ### Logs
 ```bash
 # JobManager logs
-kubectl logs -n flink -l app.kubernetes.io/component=jobmanager --tail=100 -f
+kubectl logs -n playground -l app.kubernetes.io/component=jobmanager --tail=100 -f
 
 # TaskManager logs
-kubectl logs -n flink -l app.kubernetes.io/component=taskmanager --tail=100 -f
+kubectl logs -n playground -l app.kubernetes.io/component=taskmanager --tail=100 -f
 
 # All Flink logs
-kubectl logs -n flink -l app.kubernetes.io/name=flink-autoscale --tail=100 -f
+kubectl logs -n playground -l app.kubernetes.io/name=flink-autoscale --tail=100 -f
 ```
 
 ## Troubleshooting
@@ -183,16 +183,16 @@ kubectl logs -n flink -l app.kubernetes.io/name=flink-autoscale --tail=100 -f
 ### Verify S3 Credentials
 ```bash
 # Check if secret exists
-kubectl get secret flink-autoscale-autoscaling-load-s3-credentials -n flink
+kubectl get secret flink-autoscale-autoscaling-load-s3-credentials -n playground
 
 # Verify environment variables in pod
-kubectl exec -n flink <pod> -- env | grep AWS
+kubectl exec -n playground <pod> -- env | grep AWS
 ```
 
 ### Check Checkpoint Status
 ```bash
 # View Flink logs for checkpoint activity
-kubectl logs -n flink <jobmanager-pod> | grep -i checkpoint
+kubectl logs -n playground <jobmanager-pod> | grep -i checkpoint
 
 # List checkpoints in MinIO
 kubectl exec -n storage deployment/minio -- mc ls --recursive local/flink-state/checkpoints/
@@ -201,10 +201,10 @@ kubectl exec -n storage deployment/minio -- mc ls --recursive local/flink-state/
 ### FlinkDeployment Status
 ```bash
 # Check deployment status
-kubectl get flinkdeployment -n flink
+kubectl get flinkdeployment -n playground
 
 # Describe for detailed events
-kubectl describe flinkdeployment flink-autoscale-autoscaling-load -n flink
+kubectl describe flinkdeployment flink-autoscale-autoscaling-load -n playground
 ```
 
 ## Resources

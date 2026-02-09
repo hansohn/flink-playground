@@ -9,7 +9,6 @@ playground-sized Kafka cluster and a `load-events` topic for the Flink autoscali
 |-----------|----------|----------|--------|
 | Strimzi Operator | 1 | 100m / 256Mi | 500m / 512Mi |
 | Kafka Broker | 1 | 250m / 512Mi | 1 / 1Gi |
-| ZooKeeper | 1 | 100m / 256Mi | 500m / 512Mi |
 | Topic Operator | 1 | 50m / 128Mi | 250m / 256Mi |
 | User Operator | 1 | 50m / 128Mi | 250m / 256Mi |
 
