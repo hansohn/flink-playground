@@ -155,7 +155,7 @@ serviceAccount:
 
 ### Flink UI
 ```bash
-make flink/ui
+make ui
 # Visit http://localhost:8081
 ```
 
@@ -169,13 +169,13 @@ kubectl exec -n flink <taskmanager-pod> -- curl http://localhost:9249/
 ### Logs
 ```bash
 # JobManager logs
-make logs/flink-jm
+kubectl logs -n flink -l app.kubernetes.io/component=jobmanager --tail=100 -f
 
 # TaskManager logs
-make logs/flink-tm
+kubectl logs -n flink -l app.kubernetes.io/component=taskmanager --tail=100 -f
 
 # All Flink logs
-make logs/flink
+kubectl logs -n flink -l app.kubernetes.io/name=flink-autoscale --tail=100 -f
 ```
 
 ## Troubleshooting

@@ -62,7 +62,7 @@ If you want more control:
 
 ```bash
 # 1. Create cluster and install dependencies
-make cluster/up
+make kind/up
 make metrics-server/install
 make prometheus/install
 make vpa/install
@@ -75,7 +75,7 @@ make maven/build
 make docker/build
 
 # 4. Load image into Kind cluster
-make docker/load
+make kind/load
 
 # 5. Deploy Flink job
 make flink/install
@@ -92,8 +92,6 @@ make maven/build
 # Clean Maven artifacts
 make maven/clean
 
-# Build shaded JAR (fat JAR with dependencies)
-make maven/build-shaded
 ```
 
 **Output:** `services/autoscaling-load-job/target/autoscaling-load-job.jar`
@@ -105,10 +103,7 @@ make maven/build-shaded
 make docker/build
 
 # Load Docker image into Kind cluster
-make docker/load
-
-# Build and load (convenience target)
-make docker/build-and-load
+make kind/load
 
 # Remove Docker image
 make docker/clean
@@ -252,7 +247,7 @@ Edit `services/autoscaling-load-job/pom.xml`:
 Then rebuild:
 
 ```bash
-make docker/build-and-load
+make docker/build && make kind/load
 make flink/reinstall
 ```
 
@@ -342,7 +337,7 @@ java.io.FileNotFoundException: /opt/flink/usrlib/autoscaling-load-job.jar
    ```
 3. Rebuild and reload:
    ```bash
-   make docker/build-and-load
+   make docker/build && make kind/load
    make flink/reinstall
    ```
 
@@ -356,7 +351,7 @@ ImagePullBackOff: Failed to pull image "flink-autoscaling-load:1.0.0"
 **Solution:**
 The image wasn't loaded into Kind. Run:
 ```bash
-make docker/load
+make kind/load
 ```
 
 Verify image is in Kind:
@@ -373,7 +368,7 @@ docker exec -it flink-playground-control-plane crictl images | grep flink-autosc
 2. Rebuild and redeploy:
    ```bash
    make docker/clean
-   make docker/build-and-load
+   make docker/build && make kind/load
    make flink/reinstall
    ```
 
@@ -424,13 +419,13 @@ make maven/build
 make docker/build
 
 # 4. Reload into Kind
-make docker/load
+make kind/load
 
 # 5. Restart Flink job
 make flink/reinstall
 
 # Or do all at once:
-make docker/build-and-load && make flink/reinstall
+make docker/build && make kind/load && make flink/reinstall
 ```
 
 ### Testing Locally Without Kubernetes

@@ -201,6 +201,7 @@ kind/load: kind/check
 	fi
 	@echo "[INFO] Loading Docker image into Kind cluster: $(CLUSTER_NAME)"
 	@kind load docker-image $(DOCKER_TAG_BASE):$(APP_VERSION) --name $(CLUSTER_NAME)
+	@kind load docker-image $(PRODUCER_DOCKER_TAG_BASE):$(PRODUCER_APP_VERSION) --name $(CLUSTER_NAME)
 .PHONY: kind/load
 
 ## Check if cluster is running and healthy
@@ -282,7 +283,7 @@ GRAFANA_SERVICE := grafana
 # Managed by ArgoCD - see argocd/apps/flink-autoscale.yaml
 
 FLINK_RELEASE := flink-autoscale
-FLINK_NAMESPACE := flink
+FLINK_NAMESPACE := playground
 FLINK_SERVICE := flink-autoscale-autoscaling-load-rest
 
 APP_DIR := services/autoscaling-load-job

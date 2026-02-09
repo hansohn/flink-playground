@@ -15,7 +15,7 @@ spec:
     path: charts/kafka-load-producer
   destination:
     server: https://kubernetes.default.svc
-    namespace: kafka
+    namespace: playground
   syncPolicy:
     automated:
       prune: true

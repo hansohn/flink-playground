@@ -15,7 +15,7 @@ spec:
     path: charts/flink-autoscale
   destination:
     server: https://kubernetes.default.svc
-    namespace: flink
+    namespace: playground
   syncPolicy:
     automated:
       prune: true

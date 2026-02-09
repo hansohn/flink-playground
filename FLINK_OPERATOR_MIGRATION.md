@@ -76,7 +76,7 @@ The `make up` command now includes Flink Operator installation:
 make up
 
 # Tear down everything (includes Flink Operator)
-make down
+make kind/down
 ```
 
 ## Configuration
@@ -147,24 +147,11 @@ This will:
 5. **Install Flink Kubernetes Operator**
 6. Deploy Flink using FlinkDeployment CRD
 
-### 2. Check Status
-
-```bash
-# View Flink deployment status
-make status/flink
-```
-
-Output will show:
-- FlinkDeployment resources (instead of standard Deployments)
-- Flink pods (JobManager and TaskManager)
-- Services
-- HPA/VPA status (will show as disabled)
-
-### 3. Access Flink UI
+### 2. Access Flink UI
 
 ```bash
 # Port-forward to Flink web UI
-make flink/ui
+make ui
 
 # Visit http://localhost:8081
 ```
@@ -178,10 +165,10 @@ The Flink Operator autoscaler logs can be viewed:
 kubectl logs -n flink-operator deployment/flink-kubernetes-operator -f
 
 # View Flink JobManager logs
-make logs/flink-jm
+kubectl logs -n flink -l app.kubernetes.io/component=jobmanager --tail=100 -f
 
 # View Flink TaskManager logs
-make logs/flink-tm
+kubectl logs -n flink -l app.kubernetes.io/component=taskmanager --tail=100 -f
 ```
 
 ### 5. Trigger Autoscaling
@@ -291,7 +278,7 @@ To revert to the original HPA/VPA implementation:
 git checkout main
 
 # Tear down current environment
-make down
+make kind/down
 
 # Rebuild with HPA/VPA
 make up
@@ -312,7 +299,7 @@ kubectl get pods -A
 kubectl get flinkdeployments -n flink
 
 # 4. Access Flink UI
-make flink/ui
+make ui
 # Visit http://localhost:8081 and verify job is running
 
 # 5. Monitor autoscaling over time
