@@ -9,7 +9,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/hansohn/flink-playground.git
-    targetRevision: argocd
+    targetRevision: main
     path: charts/minio
   destination:
     server: https://kubernetes.default.svc
